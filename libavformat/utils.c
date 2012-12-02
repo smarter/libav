@@ -214,38 +214,66 @@ AVInputFormat *av_find_input_format(const char *short_name)
     return NULL;
 }
 
+/* an arbitrarily chosen "sane" max packet size -- 50M */
+#define SANE_CHUNK_SIZE (50000000)
+
+/*
+ * Read the data in sane-sized chunks and append to pkt.
+ * Return the number of bytes read from s or error.
+ */
+static int append_packet_chunked(AVIOContext *s, AVPacket *pkt, int size)
+{
+    int64_t chunk_size = size;
+    int orig_pos       = pkt->pos; // av_grow_packet might reset pos
+    int orig_size      = pkt->size;
+    int ret = 0;
+
+    do {
+        int prev_size = pkt->size;
+        int read_size;
+
+        /*
+         * When the caller requests a lot of data, limit it to file size
+         * or an SANE_CHUNK_SIZE when filesize is not known
+         */
+        if (size > SANE_CHUNK_SIZE) {
+            int64_t filesize = avio_size(s) - avio_tell(s);
+            chunk_size = FFMAX(filesize, SANE_CHUNK_SIZE);
+        }
+        read_size = FFMIN(size, chunk_size);
+
+        ret = av_grow_packet(pkt, read_size);
+        if (ret < 0)
+            break;
+
+        ret = avio_read(s, pkt->data + prev_size, read_size);
+        if (ret != read_size) {
+            av_shrink_packet(pkt, prev_size + FFMAX(ret, 0));
+            break;
+        }
+
+        size -= read_size;
+    } while (size > 0);
+
+    pkt->pos = orig_pos;
+    return pkt->size > orig_size ? pkt->size - orig_size : ret;
+}
 
 int av_get_packet(AVIOContext *s, AVPacket *pkt, int size)
 {
-    int ret= av_new_packet(pkt, size);
+    av_init_packet(pkt);
+    pkt->data = NULL;
+    pkt->size = 0;
+    pkt->pos  = avio_tell(s);
 
-    if(ret<0)
-        return ret;
-
-    pkt->pos= avio_tell(s);
-
-    ret= avio_read(s, pkt->data, size);
-    if(ret<=0)
-        av_free_packet(pkt);
-    else
-        av_shrink_packet(pkt, ret);
-
-    return ret;
+    return append_packet_chunked(s, pkt, size);
 }
 
 int av_append_packet(AVIOContext *s, AVPacket *pkt, int size)
 {
-    int ret;
-    int old_size;
     if (!pkt->size)
         return av_get_packet(s, pkt, size);
-    old_size = pkt->size;
-    ret = av_grow_packet(pkt, size);
-    if (ret < 0)
-        return ret;
-    ret = avio_read(s, pkt->data + old_size, size);
-    av_shrink_packet(pkt, old_size + FFMAX(ret, 0));
-    return ret;
+    return append_packet_chunked(s, pkt, size);
 }
 
 
@@ -464,16 +492,20 @@ static AVPacket *add_to_pktbuf(AVPacketList **packet_buffer, AVPacket *pkt,
     return &pktl->pkt;
 }
 
-static void queue_attached_pictures(AVFormatContext *s)
+static int queue_attached_pictures(AVFormatContext *s)
 {
     int i;
     for (i = 0; i < s->nb_streams; i++)
         if (s->streams[i]->disposition & AV_DISPOSITION_ATTACHED_PIC &&
             s->streams[i]->discard < AVDISCARD_ALL) {
             AVPacket copy = s->streams[i]->attached_pic;
-            copy.destruct = NULL;
+            copy.buf      = av_buffer_ref(copy.buf);
+            if (!copy.buf)
+                return AVERROR(ENOMEM);
+
             add_to_pktbuf(&s->raw_packet_buffer, &copy, &s->raw_packet_buffer_end);
         }
+    return 0;
 }
 
 int avformat_open_input(AVFormatContext **ps, const char *filename, AVInputFormat *fmt, AVDictionary **options)
@@ -535,7 +567,8 @@ int avformat_open_input(AVFormatContext **ps, const char *filename, AVInputForma
         goto fail;
     ff_id3v2_free_extra_meta(&id3v2_extra_meta);
 
-    queue_attached_pictures(s);
+    if ((ret = queue_attached_pictures(s)) < 0)
+        goto fail;
 
     if (s->pb && !s->data_offset)
         s->data_offset = avio_tell(s->pb);
@@ -1074,8 +1107,12 @@ static int parse_packet(AVFormatContext *s, AVPacket *pkt, int stream_index)
         }
 
         if (out_pkt.data == pkt->data && out_pkt.size == pkt->size) {
+            out_pkt.buf   = pkt->buf;
+            pkt->buf      = NULL;
+#if FF_API_DESTRUCT_PACKET
             out_pkt.destruct = pkt->destruct;
             pkt->destruct = NULL;
+#endif
         }
         if ((ret = av_dup_packet(&out_pkt)) < 0)
             goto fail;
@@ -1735,7 +1772,7 @@ int av_seek_frame(AVFormatContext *s, int stream_index, int64_t timestamp, int f
     int ret = seek_frame_internal(s, stream_index, timestamp, flags);
 
     if (ret >= 0)
-        queue_attached_pictures(s);
+        ret = queue_attached_pictures(s);
 
     return ret;
 }
@@ -1751,7 +1788,7 @@ int avformat_seek_file(AVFormatContext *s, int stream_index, int64_t min_ts, int
         ret = s->iformat->read_seek2(s, stream_index, min_ts, ts, max_ts, flags);
 
         if (ret >= 0)
-            queue_attached_pictures(s);
+            ret = queue_attached_pictures(s);
         return ret;
     }
 

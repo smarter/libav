@@ -1648,7 +1648,7 @@ static int vorbis_decode_frame(AVCodecContext *avccontext, void *data,
 
     /* get output buffer */
     frame->nb_samples = vc->blocksize[1] / 2;
-    if ((ret = ff_get_buffer(avccontext, frame)) < 0) {
+    if ((ret = ff_get_buffer(avccontext, frame, 0)) < 0) {
         av_log(avccontext, AV_LOG_ERROR, "get_buffer() failed\n");
         return ret;
     }
