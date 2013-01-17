@@ -158,7 +158,7 @@ x11grab_read_header(AVFormatContext *s1)
     struct x11grab *x11grab = s1->priv_data;
     Display *dpy;
     AVStream *st = NULL;
-    enum PixelFormat input_pixfmt;
+    enum AVPixelFormat input_pixfmt;
     XImage *image;
     int x_off = 0;
     int y_off = 0;
@@ -259,19 +259,19 @@ x11grab_read_header(AVFormatContext *s1)
     switch (image->bits_per_pixel) {
     case 8:
         av_log (s1, AV_LOG_DEBUG, "8 bit palette\n");
-        input_pixfmt = PIX_FMT_PAL8;
+        input_pixfmt = AV_PIX_FMT_PAL8;
         break;
     case 16:
         if (       image->red_mask   == 0xf800 &&
                    image->green_mask == 0x07e0 &&
                    image->blue_mask  == 0x001f ) {
             av_log (s1, AV_LOG_DEBUG, "16 bit RGB565\n");
-            input_pixfmt = PIX_FMT_RGB565;
+            input_pixfmt = AV_PIX_FMT_RGB565;
         } else if (image->red_mask   == 0x7c00 &&
                    image->green_mask == 0x03e0 &&
                    image->blue_mask  == 0x001f ) {
             av_log(s1, AV_LOG_DEBUG, "16 bit RGB555\n");
-            input_pixfmt = PIX_FMT_RGB555;
+            input_pixfmt = AV_PIX_FMT_RGB555;
         } else {
             av_log(s1, AV_LOG_ERROR, "RGB ordering at image depth %i not supported ... aborting\n", image->bits_per_pixel);
             av_log(s1, AV_LOG_ERROR, "color masks: r 0x%.6lx g 0x%.6lx b 0x%.6lx\n", image->red_mask, image->green_mask, image->blue_mask);
@@ -283,11 +283,11 @@ x11grab_read_header(AVFormatContext *s1)
         if (        image->red_mask   == 0xff0000 &&
                     image->green_mask == 0x00ff00 &&
                     image->blue_mask  == 0x0000ff ) {
-            input_pixfmt = PIX_FMT_BGR24;
+            input_pixfmt = AV_PIX_FMT_BGR24;
         } else if ( image->red_mask   == 0x0000ff &&
                     image->green_mask == 0x00ff00 &&
                     image->blue_mask  == 0xff0000 ) {
-            input_pixfmt = PIX_FMT_RGB24;
+            input_pixfmt = AV_PIX_FMT_RGB24;
         } else {
             av_log(s1, AV_LOG_ERROR,"rgb ordering at image depth %i not supported ... aborting\n", image->bits_per_pixel);
             av_log(s1, AV_LOG_ERROR, "color masks: r 0x%.6lx g 0x%.6lx b 0x%.6lx\n", image->red_mask, image->green_mask, image->blue_mask);
@@ -296,7 +296,7 @@ x11grab_read_header(AVFormatContext *s1)
         }
         break;
     case 32:
-        input_pixfmt = PIX_FMT_RGB32;
+        input_pixfmt = AV_PIX_FMT_RGB32;
         break;
     default:
         av_log(s1, AV_LOG_ERROR, "image depth %i not supported ... aborting\n", image->bits_per_pixel);
@@ -587,11 +587,11 @@ x11grab_read_close(AVFormatContext *s1)
 static const AVOption options[] = {
     { "video_size", "A string describing frame size, such as 640x480 or hd720.", OFFSET(video_size), AV_OPT_TYPE_STRING, {.str = "vga"}, 0, 0, DEC },
     { "framerate", "", OFFSET(framerate), AV_OPT_TYPE_STRING, {.str = "ntsc"}, 0, 0, DEC },
-    { "draw_mouse", "Draw the mouse pointer.", OFFSET(draw_mouse), AV_OPT_TYPE_INT, { 1 }, 0, 1, DEC },
+    { "draw_mouse", "Draw the mouse pointer.", OFFSET(draw_mouse), AV_OPT_TYPE_INT, { .i64 = 1 }, 0, 1, DEC },
     { "follow_mouse", "Move the grabbing region when the mouse pointer reaches within specified amount of pixels to the edge of region.",
-      OFFSET(follow_mouse), AV_OPT_TYPE_INT, { 0 }, -1, INT_MAX, DEC, "follow_mouse" },
-    { "centered", "Keep the mouse pointer at the center of grabbing region when following.", 0, AV_OPT_TYPE_CONST, { -1 }, INT_MIN, INT_MAX, DEC, "follow_mouse" },
-    { "show_region", "Show the grabbing region.", OFFSET(show_region), AV_OPT_TYPE_INT, { 0 }, 0, 1, DEC },
+      OFFSET(follow_mouse), AV_OPT_TYPE_INT, { .i64 = 0 }, -1, INT_MAX, DEC, "follow_mouse" },
+    { "centered", "Keep the mouse pointer at the center of grabbing region when following.", 0, AV_OPT_TYPE_CONST, { .i64 = -1 }, INT_MIN, INT_MAX, DEC, "follow_mouse" },
+    { "show_region", "Show the grabbing region.", OFFSET(show_region), AV_OPT_TYPE_INT, { .i64 = 0 }, 0, 1, DEC },
     { NULL },
 };
 

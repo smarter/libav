@@ -160,6 +160,12 @@ static int set_string(void *obj, const AVOption *o, const char *val, uint8_t **d
     return 0;
 }
 
+#define DEFAULT_NUMVAL(opt) ((opt->type == AV_OPT_TYPE_INT64 || \
+                              opt->type == AV_OPT_TYPE_CONST || \
+                              opt->type == AV_OPT_TYPE_FLAGS || \
+                              opt->type == AV_OPT_TYPE_INT) ? \
+                             opt->default_val.i64 : opt->default_val.dbl)
+
 static int set_string_number(void *obj, const AVOption *o, const char *val, void *dst)
 {
     int ret = 0, notfirst = 0;
@@ -180,8 +186,8 @@ static int set_string_number(void *obj, const AVOption *o, const char *val, void
         {
             const AVOption *o_named = av_opt_find(obj, buf, o->unit, 0, 0);
             if (o_named && o_named->type == AV_OPT_TYPE_CONST)
-                d = o_named->default_val.dbl;
-            else if (!strcmp(buf, "default")) d = o->default_val.dbl;
+                d = DEFAULT_NUMVAL(o_named);
+            else if (!strcmp(buf, "default")) d = DEFAULT_NUMVAL(o);
             else if (!strcmp(buf, "max"    )) d = o->max;
             else if (!strcmp(buf, "min"    )) d = o->min;
             else if (!strcmp(buf, "none"   )) d = 0;
@@ -541,7 +547,7 @@ int av_opt_flag_is_set(void *obj, const char *field_name, const char *flag_name)
     if (!field || !flag || flag->type != AV_OPT_TYPE_CONST ||
         av_opt_get_int(obj, field_name, 0, &res) < 0)
         return 0;
-    return res & (int) flag->default_val.dbl;
+    return res & flag->default_val.i64;
 }
 
 static void opt_list(void *obj, void *av_log_obj, const char *unit,
@@ -645,16 +651,9 @@ void av_opt_set_defaults2(void *s, int mask, int flags)
                 /* Nothing to be done here */
             break;
             case AV_OPT_TYPE_FLAGS:
-            case AV_OPT_TYPE_INT: {
-                int val;
-                val = opt->default_val.dbl;
-                av_opt_set_int(s, opt->name, val, 0);
-            }
-            break;
+            case AV_OPT_TYPE_INT:
             case AV_OPT_TYPE_INT64:
-                if ((double)(opt->default_val.dbl+0.6) == opt->default_val.dbl)
-                    av_log(s, AV_LOG_DEBUG, "loss of precision in default of %s\n", opt->name);
-                av_opt_set_int(s, opt->name, opt->default_val.dbl, 0);
+                av_opt_set_int(s, opt->name, opt->default_val.i64, 0);
             break;
             case AV_OPT_TYPE_DOUBLE:
             case AV_OPT_TYPE_FLOAT: {
@@ -852,14 +851,14 @@ typedef struct TestContext
 #define TEST_FLAG_MU   04
 
 static const AVOption test_options[]= {
-{"num",      "set num",        OFFSET(num),      AV_OPT_TYPE_INT,      {0},              0,        100                 },
-{"toggle",   "set toggle",     OFFSET(toggle),   AV_OPT_TYPE_INT,      {0},              0,        1                   },
-{"rational", "set rational",   OFFSET(rational), AV_OPT_TYPE_RATIONAL, {0},              0,        10                  },
+{"num",      "set num",        OFFSET(num),      AV_OPT_TYPE_INT,      {.i64 = 0},       0,        100                 },
+{"toggle",   "set toggle",     OFFSET(toggle),   AV_OPT_TYPE_INT,      {.i64 = 0},       0,        1                   },
+{"rational", "set rational",   OFFSET(rational), AV_OPT_TYPE_RATIONAL, {.dbl = 0},  0,        10                  },
 {"string",   "set string",     OFFSET(string),   AV_OPT_TYPE_STRING,   {0},              CHAR_MIN, CHAR_MAX            },
-{"flags",    "set flags",      OFFSET(flags),    AV_OPT_TYPE_FLAGS,    {0},              0,        INT_MAX, 0, "flags" },
-{"cool",     "set cool flag ", 0,                AV_OPT_TYPE_CONST,    {TEST_FLAG_COOL}, INT_MIN,  INT_MAX, 0, "flags" },
-{"lame",     "set lame flag ", 0,                AV_OPT_TYPE_CONST,    {TEST_FLAG_LAME}, INT_MIN,  INT_MAX, 0, "flags" },
-{"mu",       "set mu flag ",   0,                AV_OPT_TYPE_CONST,    {TEST_FLAG_MU},   INT_MIN,  INT_MAX, 0, "flags" },
+{"flags",    "set flags",      OFFSET(flags),    AV_OPT_TYPE_FLAGS,    {.i64 = 0},       0,        INT_MAX, 0, "flags" },
+{"cool",     "set cool flag ", 0,                AV_OPT_TYPE_CONST,    {.i64 = TEST_FLAG_COOL}, INT_MIN,  INT_MAX, 0, "flags" },
+{"lame",     "set lame flag ", 0,                AV_OPT_TYPE_CONST,    {.i64 = TEST_FLAG_LAME}, INT_MIN,  INT_MAX, 0, "flags" },
+{"mu",       "set mu flag ",   0,                AV_OPT_TYPE_CONST,    {.i64 = TEST_FLAG_MU},   INT_MIN,  INT_MAX, 0, "flags" },
 {NULL},
 };
 

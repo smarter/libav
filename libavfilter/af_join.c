@@ -77,7 +77,7 @@ typedef struct JoinBufferPriv {
 #define OFFSET(x) offsetof(JoinContext, x)
 #define A AV_OPT_FLAG_AUDIO_PARAM
 static const AVOption join_options[] = {
-    { "inputs",         "Number of input streams.", OFFSET(inputs),             AV_OPT_TYPE_INT,    { 2 }, 1, INT_MAX,       A },
+    { "inputs",         "Number of input streams.", OFFSET(inputs),             AV_OPT_TYPE_INT,    { .i64 = 2 }, 1, INT_MAX,       A },
     { "channel_layout", "Channel layout of the "
                         "output stream.",           OFFSET(channel_layout_str), AV_OPT_TYPE_STRING, {.str = "stereo"}, 0, 0, A },
     { "map",            "A comma-separated list of channels maps in the format "
@@ -485,6 +485,16 @@ fail:
     return AVERROR(ENOMEM);
 }
 
+static const AVFilterPad avfilter_af_join_outputs[] = {
+    {
+        .name          = "default",
+        .type          = AVMEDIA_TYPE_AUDIO,
+        .config_props  = join_config_output,
+        .request_frame = join_request_frame,
+    },
+    { NULL }
+};
+
 AVFilter avfilter_af_join = {
     .name           = "join",
     .description    = NULL_IF_CONFIG_SMALL("Join multiple audio streams into "
@@ -495,10 +505,6 @@ AVFilter avfilter_af_join = {
     .uninit         = join_uninit,
     .query_formats  = join_query_formats,
 
-    .inputs  = (const AVFilterPad[]){{ NULL }},
-    .outputs = (const AVFilterPad[]){{ .name          = "default",
-                                       .type          = AVMEDIA_TYPE_AUDIO,
-                                       .config_props  = join_config_output,
-                                       .request_frame = join_request_frame, },
-                                     { NULL }},
+    .inputs  = NULL,
+    .outputs = avfilter_af_join_outputs,
 };

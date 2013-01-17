@@ -86,17 +86,17 @@ typedef struct {
 #define OFFSET(x) offsetof(LutContext, x)
 
 static const AVOption lut_options[] = {
-    {"c0", "set component #0 expression", OFFSET(comp_expr_str[0]),  FF_OPT_TYPE_STRING, {.str="val"}, CHAR_MIN, CHAR_MAX},
-    {"c1", "set component #1 expression", OFFSET(comp_expr_str[1]),  FF_OPT_TYPE_STRING, {.str="val"}, CHAR_MIN, CHAR_MAX},
-    {"c2", "set component #2 expression", OFFSET(comp_expr_str[2]),  FF_OPT_TYPE_STRING, {.str="val"}, CHAR_MIN, CHAR_MAX},
-    {"c3", "set component #3 expression", OFFSET(comp_expr_str[3]),  FF_OPT_TYPE_STRING, {.str="val"}, CHAR_MIN, CHAR_MAX},
-    {"y",  "set Y expression", OFFSET(comp_expr_str[Y]),  FF_OPT_TYPE_STRING, {.str="val"}, CHAR_MIN, CHAR_MAX},
-    {"u",  "set U expression", OFFSET(comp_expr_str[U]),  FF_OPT_TYPE_STRING, {.str="val"}, CHAR_MIN, CHAR_MAX},
-    {"v",  "set V expression", OFFSET(comp_expr_str[V]),  FF_OPT_TYPE_STRING, {.str="val"}, CHAR_MIN, CHAR_MAX},
-    {"r",  "set R expression", OFFSET(comp_expr_str[R]),  FF_OPT_TYPE_STRING, {.str="val"}, CHAR_MIN, CHAR_MAX},
-    {"g",  "set G expression", OFFSET(comp_expr_str[G]),  FF_OPT_TYPE_STRING, {.str="val"}, CHAR_MIN, CHAR_MAX},
-    {"b",  "set B expression", OFFSET(comp_expr_str[B]),  FF_OPT_TYPE_STRING, {.str="val"}, CHAR_MIN, CHAR_MAX},
-    {"a",  "set A expression", OFFSET(comp_expr_str[A]),  FF_OPT_TYPE_STRING, {.str="val"}, CHAR_MIN, CHAR_MAX},
+    {"c0", "set component #0 expression", OFFSET(comp_expr_str[0]),  AV_OPT_TYPE_STRING, {.str="val"}, CHAR_MIN, CHAR_MAX},
+    {"c1", "set component #1 expression", OFFSET(comp_expr_str[1]),  AV_OPT_TYPE_STRING, {.str="val"}, CHAR_MIN, CHAR_MAX},
+    {"c2", "set component #2 expression", OFFSET(comp_expr_str[2]),  AV_OPT_TYPE_STRING, {.str="val"}, CHAR_MIN, CHAR_MAX},
+    {"c3", "set component #3 expression", OFFSET(comp_expr_str[3]),  AV_OPT_TYPE_STRING, {.str="val"}, CHAR_MIN, CHAR_MAX},
+    {"y",  "set Y expression", OFFSET(comp_expr_str[Y]),  AV_OPT_TYPE_STRING, {.str="val"}, CHAR_MIN, CHAR_MAX},
+    {"u",  "set U expression", OFFSET(comp_expr_str[U]),  AV_OPT_TYPE_STRING, {.str="val"}, CHAR_MIN, CHAR_MAX},
+    {"v",  "set V expression", OFFSET(comp_expr_str[V]),  AV_OPT_TYPE_STRING, {.str="val"}, CHAR_MIN, CHAR_MAX},
+    {"r",  "set R expression", OFFSET(comp_expr_str[R]),  AV_OPT_TYPE_STRING, {.str="val"}, CHAR_MIN, CHAR_MAX},
+    {"g",  "set G expression", OFFSET(comp_expr_str[G]),  AV_OPT_TYPE_STRING, {.str="val"}, CHAR_MIN, CHAR_MAX},
+    {"b",  "set B expression", OFFSET(comp_expr_str[B]),  AV_OPT_TYPE_STRING, {.str="val"}, CHAR_MIN, CHAR_MAX},
+    {"a",  "set A expression", OFFSET(comp_expr_str[A]),  AV_OPT_TYPE_STRING, {.str="val"}, CHAR_MIN, CHAR_MAX},
     {NULL},
 };
 
@@ -144,26 +144,26 @@ static av_cold void uninit(AVFilterContext *ctx)
 }
 
 #define YUV_FORMATS                                         \
-    PIX_FMT_YUV444P,  PIX_FMT_YUV422P,  PIX_FMT_YUV420P,    \
-    PIX_FMT_YUV411P,  PIX_FMT_YUV410P,  PIX_FMT_YUV440P,    \
-    PIX_FMT_YUVA420P,                                       \
-    PIX_FMT_YUVJ444P, PIX_FMT_YUVJ422P, PIX_FMT_YUVJ420P,   \
-    PIX_FMT_YUVJ440P
+    AV_PIX_FMT_YUV444P,  AV_PIX_FMT_YUV422P,  AV_PIX_FMT_YUV420P,    \
+    AV_PIX_FMT_YUV411P,  AV_PIX_FMT_YUV410P,  AV_PIX_FMT_YUV440P,    \
+    AV_PIX_FMT_YUVA420P,                                       \
+    AV_PIX_FMT_YUVJ444P, AV_PIX_FMT_YUVJ422P, AV_PIX_FMT_YUVJ420P,   \
+    AV_PIX_FMT_YUVJ440P
 
 #define RGB_FORMATS                             \
-    PIX_FMT_ARGB,         PIX_FMT_RGBA,         \
-    PIX_FMT_ABGR,         PIX_FMT_BGRA,         \
-    PIX_FMT_RGB24,        PIX_FMT_BGR24
+    AV_PIX_FMT_ARGB,         AV_PIX_FMT_RGBA,         \
+    AV_PIX_FMT_ABGR,         AV_PIX_FMT_BGRA,         \
+    AV_PIX_FMT_RGB24,        AV_PIX_FMT_BGR24
 
-static enum PixelFormat yuv_pix_fmts[] = { YUV_FORMATS, PIX_FMT_NONE };
-static enum PixelFormat rgb_pix_fmts[] = { RGB_FORMATS, PIX_FMT_NONE };
-static enum PixelFormat all_pix_fmts[] = { RGB_FORMATS, YUV_FORMATS, PIX_FMT_NONE };
+static enum AVPixelFormat yuv_pix_fmts[] = { YUV_FORMATS, AV_PIX_FMT_NONE };
+static enum AVPixelFormat rgb_pix_fmts[] = { RGB_FORMATS, AV_PIX_FMT_NONE };
+static enum AVPixelFormat all_pix_fmts[] = { RGB_FORMATS, YUV_FORMATS, AV_PIX_FMT_NONE };
 
 static int query_formats(AVFilterContext *ctx)
 {
     LutContext *lut = ctx->priv;
 
-    enum PixelFormat *pix_fmts = lut->is_rgb ? rgb_pix_fmts :
+    enum AVPixelFormat *pix_fmts = lut->is_rgb ? rgb_pix_fmts :
                                  lut->is_yuv ? yuv_pix_fmts : all_pix_fmts;
 
     ff_set_common_formats(ctx, ff_make_format_list(pix_fmts));
@@ -223,13 +223,13 @@ static int config_props(AVFilterLink *inlink)
     lut->var_values[VAR_H] = inlink->h;
 
     switch (inlink->format) {
-    case PIX_FMT_YUV410P:
-    case PIX_FMT_YUV411P:
-    case PIX_FMT_YUV420P:
-    case PIX_FMT_YUV422P:
-    case PIX_FMT_YUV440P:
-    case PIX_FMT_YUV444P:
-    case PIX_FMT_YUVA420P:
+    case AV_PIX_FMT_YUV410P:
+    case AV_PIX_FMT_YUV411P:
+    case AV_PIX_FMT_YUV420P:
+    case AV_PIX_FMT_YUV422P:
+    case AV_PIX_FMT_YUV440P:
+    case AV_PIX_FMT_YUV444P:
+    case AV_PIX_FMT_YUVA420P:
         min[Y] = min[U] = min[V] = 16;
         max[Y] = 235;
         max[U] = max[V] = 240;
@@ -246,12 +246,12 @@ static int config_props(AVFilterLink *inlink)
 
     if (lut->is_rgb) {
         switch (inlink->format) {
-        case PIX_FMT_ARGB:  lut->rgba_map[A] = 0; lut->rgba_map[R] = 1; lut->rgba_map[G] = 2; lut->rgba_map[B] = 3; break;
-        case PIX_FMT_ABGR:  lut->rgba_map[A] = 0; lut->rgba_map[B] = 1; lut->rgba_map[G] = 2; lut->rgba_map[R] = 3; break;
-        case PIX_FMT_RGBA:
-        case PIX_FMT_RGB24: lut->rgba_map[R] = 0; lut->rgba_map[G] = 1; lut->rgba_map[B] = 2; lut->rgba_map[A] = 3; break;
-        case PIX_FMT_BGRA:
-        case PIX_FMT_BGR24: lut->rgba_map[B] = 0; lut->rgba_map[G] = 1; lut->rgba_map[R] = 2; lut->rgba_map[A] = 3; break;
+        case AV_PIX_FMT_ARGB:  lut->rgba_map[A] = 0; lut->rgba_map[R] = 1; lut->rgba_map[G] = 2; lut->rgba_map[B] = 3; break;
+        case AV_PIX_FMT_ABGR:  lut->rgba_map[A] = 0; lut->rgba_map[B] = 1; lut->rgba_map[G] = 2; lut->rgba_map[R] = 3; break;
+        case AV_PIX_FMT_RGBA:
+        case AV_PIX_FMT_RGB24: lut->rgba_map[R] = 0; lut->rgba_map[G] = 1; lut->rgba_map[B] = 2; lut->rgba_map[A] = 3; break;
+        case AV_PIX_FMT_BGRA:
+        case AV_PIX_FMT_BGR24: lut->rgba_map[B] = 0; lut->rgba_map[G] = 1; lut->rgba_map[R] = 2; lut->rgba_map[A] = 3; break;
         }
         lut->step = av_get_bits_per_pixel(desc) >> 3;
     }

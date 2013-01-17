@@ -761,10 +761,18 @@ int avio_close(AVIOContext *s)
     if (!s)
         return 0;
 
+    avio_flush(s);
     h = s->opaque;
-    av_free(s->buffer);
+    av_freep(&s->buffer);
     av_free(s);
     return ffurl_close(h);
+}
+
+int avio_closep(AVIOContext **s)
+{
+    int ret = avio_close(*s);
+    *s = NULL;
+    return ret;
 }
 
 int avio_printf(AVIOContext *s, const char *fmt, ...)

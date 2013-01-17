@@ -138,13 +138,13 @@ typedef struct {
 #define OFFSET(x) offsetof(DelogoContext, x)
 
 static const AVOption delogo_options[]= {
-    {"x",    "set logo x position",       OFFSET(x),    FF_OPT_TYPE_INT, {-1}, -1, INT_MAX },
-    {"y",    "set logo y position",       OFFSET(y),    FF_OPT_TYPE_INT, {-1}, -1, INT_MAX },
-    {"w",    "set logo width",            OFFSET(w),    FF_OPT_TYPE_INT, {-1}, -1, INT_MAX },
-    {"h",    "set logo height",           OFFSET(h),    FF_OPT_TYPE_INT, {-1}, -1, INT_MAX },
-    {"band", "set delogo area band size", OFFSET(band), FF_OPT_TYPE_INT, { 4}, -1, INT_MAX },
-    {"t",    "set delogo area band size", OFFSET(band), FF_OPT_TYPE_INT, { 4}, -1, INT_MAX },
-    {"show", "show delogo area",          OFFSET(show), FF_OPT_TYPE_INT, { 0},  0, 1       },
+    {"x",    "set logo x position",       OFFSET(x),    AV_OPT_TYPE_INT, {.i64 = -1}, -1, INT_MAX },
+    {"y",    "set logo y position",       OFFSET(y),    AV_OPT_TYPE_INT, {.i64 = -1}, -1, INT_MAX },
+    {"w",    "set logo width",            OFFSET(w),    AV_OPT_TYPE_INT, {.i64 = -1}, -1, INT_MAX },
+    {"h",    "set logo height",           OFFSET(h),    AV_OPT_TYPE_INT, {.i64 = -1}, -1, INT_MAX },
+    {"band", "set delogo area band size", OFFSET(band), AV_OPT_TYPE_INT, {.i64 =  4}, -1, INT_MAX },
+    {"t",    "set delogo area band size", OFFSET(band), AV_OPT_TYPE_INT, {.i64 =  4}, -1, INT_MAX },
+    {"show", "show delogo area",          OFFSET(show), AV_OPT_TYPE_INT, {.i64 =  0},  0, 1       },
     {NULL},
 };
 
@@ -161,11 +161,11 @@ static const AVClass delogo_class = {
 
 static int query_formats(AVFilterContext *ctx)
 {
-    enum PixelFormat pix_fmts[] = {
-        PIX_FMT_YUV444P,  PIX_FMT_YUV422P,  PIX_FMT_YUV420P,
-        PIX_FMT_YUV411P,  PIX_FMT_YUV410P,  PIX_FMT_YUV440P,
-        PIX_FMT_YUVA420P, PIX_FMT_GRAY8,
-        PIX_FMT_NONE
+    enum AVPixelFormat pix_fmts[] = {
+        AV_PIX_FMT_YUV444P,  AV_PIX_FMT_YUV422P,  AV_PIX_FMT_YUV420P,
+        AV_PIX_FMT_YUV411P,  AV_PIX_FMT_YUV410P,  AV_PIX_FMT_YUV440P,
+        AV_PIX_FMT_YUVA420P, AV_PIX_FMT_GRAY8,
+        AV_PIX_FMT_NONE
     };
 
     ff_set_common_formats(ctx, ff_make_format_list(pix_fmts));
@@ -251,6 +251,28 @@ static int end_frame(AVFilterLink *inlink)
     return 0;
 }
 
+static const AVFilterPad avfilter_vf_delogo_inputs[] = {
+    {
+        .name             = "default",
+        .type             = AVMEDIA_TYPE_VIDEO,
+        .get_video_buffer = ff_null_get_video_buffer,
+        .start_frame      = ff_inplace_start_frame,
+        .draw_slice       = null_draw_slice,
+        .end_frame        = end_frame,
+        .min_perms        = AV_PERM_WRITE | AV_PERM_READ,
+        .rej_perms        = AV_PERM_PRESERVE
+    },
+    { NULL }
+};
+
+static const AVFilterPad avfilter_vf_delogo_outputs[] = {
+    {
+        .name = "default",
+        .type = AVMEDIA_TYPE_VIDEO,
+    },
+    { NULL }
+};
+
 AVFilter avfilter_vf_delogo = {
     .name          = "delogo",
     .description   = NULL_IF_CONFIG_SMALL("Remove logo from input video."),
@@ -258,16 +280,6 @@ AVFilter avfilter_vf_delogo = {
     .init          = init,
     .query_formats = query_formats,
 
-    .inputs    = (const AVFilterPad[]) {{ .name             = "default",
-                                          .type             = AVMEDIA_TYPE_VIDEO,
-                                          .get_video_buffer = ff_null_get_video_buffer,
-                                          .start_frame      = ff_inplace_start_frame,
-                                          .draw_slice       = null_draw_slice,
-                                          .end_frame        = end_frame,
-                                          .min_perms        = AV_PERM_WRITE | AV_PERM_READ,
-                                          .rej_perms        = AV_PERM_PRESERVE },
-                                        { .name = NULL}},
-    .outputs   = (const AVFilterPad[]) {{ .name             = "default",
-                                          .type             = AVMEDIA_TYPE_VIDEO, },
-                                        { .name = NULL}},
+    .inputs    = avfilter_vf_delogo_inputs,
+    .outputs   = avfilter_vf_delogo_outputs,
 };

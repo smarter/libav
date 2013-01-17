@@ -46,11 +46,11 @@ typedef struct ASyncContext {
 #define OFFSET(x) offsetof(ASyncContext, x)
 #define A AV_OPT_FLAG_AUDIO_PARAM
 static const AVOption options[] = {
-    { "compensate", "Stretch/squeeze the data to make it match the timestamps", OFFSET(resample),      AV_OPT_TYPE_INT,   { 0 },   0, 1,       A },
+    { "compensate", "Stretch/squeeze the data to make it match the timestamps", OFFSET(resample),      AV_OPT_TYPE_INT,   { .i64 = 0 },   0, 1,       A },
     { "min_delta",  "Minimum difference between timestamps and audio data "
-                    "(in seconds) to trigger padding/trimmin the data.",        OFFSET(min_delta_sec), AV_OPT_TYPE_FLOAT, { 0.1 }, 0, INT_MAX, A },
-    { "max_comp",   "Maximum compensation in samples per second.",              OFFSET(max_comp),      AV_OPT_TYPE_INT,   { 500 }, 0, INT_MAX, A },
-    { "first_pts",  "Assume the first pts should be this value.",               OFFSET(pts),           AV_OPT_TYPE_INT64, { AV_NOPTS_VALUE }, INT64_MIN, INT64_MAX, A },
+                    "(in seconds) to trigger padding/trimmin the data.",        OFFSET(min_delta_sec), AV_OPT_TYPE_FLOAT, { .dbl = 0.1 }, 0, INT_MAX, A },
+    { "max_comp",   "Maximum compensation in samples per second.",              OFFSET(max_comp),      AV_OPT_TYPE_INT,   { .i64 = 500 }, 0, INT_MAX, A },
+    { "first_pts",  "Assume the first pts should be this value.",               OFFSET(pts),           AV_OPT_TYPE_INT64, { .i64 = AV_NOPTS_VALUE }, INT64_MIN, INT64_MAX, A },
     { NULL },
 };
 
@@ -133,8 +133,13 @@ static int request_frame(AVFilterLink *link)
                                                      nb_samples);
         if (!buf)
             return AVERROR(ENOMEM);
-        avresample_convert(s->avr, (void**)buf->extended_data, buf->linesize[0],
-                           nb_samples, NULL, 0, 0);
+        ret = avresample_convert(s->avr, buf->extended_data,
+                                 buf->linesize[0], nb_samples, NULL, 0, 0);
+        if (ret <= 0) {
+            avfilter_unref_bufferp(&buf);
+            return (ret < 0) ? ret : AVERROR_EOF;
+        }
+
         buf->pts = s->pts;
         return ff_filter_samples(link, buf);
     }
@@ -144,7 +149,7 @@ static int request_frame(AVFilterLink *link)
 
 static int write_to_fifo(ASyncContext *s, AVFilterBufferRef *buf)
 {
-    int ret = avresample_convert(s->avr, NULL, 0, 0, (void**)buf->extended_data,
+    int ret = avresample_convert(s->avr, NULL, 0, 0, buf->extended_data,
                                  buf->linesize[0], buf->audio->nb_samples);
     avfilter_unref_buffer(buf);
     return ret;
@@ -205,7 +210,7 @@ static int filter_samples(AVFilterLink *inlink, AVFilterBufferRef *buf)
             goto fail;
         }
 
-        avresample_read(s->avr, (void**)buf_out->extended_data, out_size);
+        avresample_read(s->avr, buf_out->extended_data, out_size);
         buf_out->pts = s->pts;
 
         if (delta > 0) {
@@ -225,7 +230,7 @@ static int filter_samples(AVFilterLink *inlink, AVFilterBufferRef *buf)
     avresample_read(s->avr, NULL, avresample_available(s->avr));
 
     s->pts = pts - avresample_get_delay(s->avr);
-    ret = avresample_convert(s->avr, NULL, 0, 0, (void**)buf->extended_data,
+    ret = avresample_convert(s->avr, NULL, 0, 0, buf->extended_data,
                              buf->linesize[0], buf->audio->nb_samples);
 
 fail:
@@ -233,6 +238,25 @@ fail:
 
     return ret;
 }
+
+static const AVFilterPad avfilter_af_asyncts_inputs[] = {
+    {
+        .name           = "default",
+        .type           = AVMEDIA_TYPE_AUDIO,
+        .filter_samples = filter_samples
+    },
+    { NULL }
+};
+
+static const AVFilterPad avfilter_af_asyncts_outputs[] = {
+    {
+        .name          = "default",
+        .type          = AVMEDIA_TYPE_AUDIO,
+        .config_props  = config_props,
+        .request_frame = request_frame
+    },
+    { NULL }
+};
 
 AVFilter avfilter_af_asyncts = {
     .name        = "asyncts",
@@ -243,13 +267,6 @@ AVFilter avfilter_af_asyncts = {
 
     .priv_size   = sizeof(ASyncContext),
 
-    .inputs      = (const AVFilterPad[]) {{ .name           = "default",
-                                            .type           = AVMEDIA_TYPE_AUDIO,
-                                            .filter_samples = filter_samples },
-                                          { NULL }},
-    .outputs     = (const AVFilterPad[]) {{ .name           = "default",
-                                            .type           = AVMEDIA_TYPE_AUDIO,
-                                            .config_props   = config_props,
-                                            .request_frame  = request_frame },
-                                          { NULL }},
+    .inputs      = avfilter_af_asyncts_inputs,
+    .outputs     = avfilter_af_asyncts_outputs,
 };

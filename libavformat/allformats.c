@@ -106,6 +106,7 @@ void av_register_all(void)
     REGISTER_MUXDEMUX (H261, h261);
     REGISTER_MUXDEMUX (H263, h263);
     REGISTER_MUXDEMUX (H264, h264);
+    REGISTER_DEMUXER  (HEVC, hevc);
     REGISTER_DEMUXER  (HLS, hls);
     REGISTER_DEMUXER  (IDCIN, idcin);
     REGISTER_DEMUXER  (IFF, iff);
@@ -207,6 +208,7 @@ void av_register_all(void)
     REGISTER_DEMUXER  (SIFF, siff);
     REGISTER_DEMUXER  (SMACKER, smacker);
     REGISTER_MUXDEMUX (SMJPEG, smjpeg);
+    REGISTER_MUXER    (SMOOTHSTREAMING, smoothstreaming);
     REGISTER_DEMUXER  (SOL, sol);
     REGISTER_MUXDEMUX (SOX, sox);
     REGISTER_MUXDEMUX (SPDIF, spdif);

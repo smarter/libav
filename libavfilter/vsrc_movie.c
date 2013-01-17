@@ -62,8 +62,8 @@ typedef struct {
 static const AVOption movie_options[]= {
 {"format_name",  "set format name",         OFFSET(format_name),  AV_OPT_TYPE_STRING, {.str =  0},  CHAR_MIN, CHAR_MAX },
 {"f",            "set format name",         OFFSET(format_name),  AV_OPT_TYPE_STRING, {.str =  0},  CHAR_MIN, CHAR_MAX },
-{"stream_index", "set stream index",        OFFSET(stream_index), AV_OPT_TYPE_INT,    {.dbl = -1},  -1,       INT_MAX  },
-{"si",           "set stream index",        OFFSET(stream_index), AV_OPT_TYPE_INT,    {.dbl = -1},  -1,       INT_MAX  },
+{"stream_index", "set stream index",        OFFSET(stream_index), AV_OPT_TYPE_INT,    {.i64 = -1},  -1,       INT_MAX  },
+{"si",           "set stream index",        OFFSET(stream_index), AV_OPT_TYPE_INT,    {.i64 = -1},  -1,       INT_MAX  },
 {"seek_point",   "set seekpoint (seconds)", OFFSET(seek_point_d), AV_OPT_TYPE_DOUBLE, {.dbl =  0},  0,        (INT64_MAX-1) / 1000000 },
 {"sp",           "set seekpoint (seconds)", OFFSET(seek_point_d), AV_OPT_TYPE_DOUBLE, {.dbl =  0},  0,        (INT64_MAX-1) / 1000000 },
 {NULL},
@@ -197,13 +197,13 @@ static av_cold void uninit(AVFilterContext *ctx)
     if (movie->format_ctx)
         avformat_close_input(&movie->format_ctx);
     avfilter_unref_buffer(movie->picref);
-    av_freep(&movie->frame);
+    avcodec_free_frame(&movie->frame);
 }
 
 static int query_formats(AVFilterContext *ctx)
 {
     MovieContext *movie = ctx->priv;
-    enum PixelFormat pix_fmts[] = { movie->codec_ctx->pix_fmt, PIX_FMT_NONE };
+    enum AVPixelFormat pix_fmts[] = { movie->codec_ctx->pix_fmt, AV_PIX_FMT_NONE };
 
     ff_set_common_formats(ctx, ff_make_format_list(pix_fmts));
     return 0;
@@ -309,6 +309,16 @@ fail:
     return ret;
 }
 
+static const AVFilterPad avfilter_vsrc_movie_outputs[] = {
+    {
+        .name          = "default",
+        .type          = AVMEDIA_TYPE_VIDEO,
+        .request_frame = request_frame,
+        .config_props  = config_output_props,
+    },
+    { NULL }
+};
+
 AVFilter avfilter_vsrc_movie = {
     .name          = "movie",
     .description   = NULL_IF_CONFIG_SMALL("Read from a movie source."),
@@ -317,10 +327,6 @@ AVFilter avfilter_vsrc_movie = {
     .uninit        = uninit,
     .query_formats = query_formats,
 
-    .inputs    = (const AVFilterPad[]) {{ .name = NULL }},
-    .outputs   = (const AVFilterPad[]) {{ .name            = "default",
-                                          .type            = AVMEDIA_TYPE_VIDEO,
-                                          .request_frame   = request_frame,
-                                          .config_props    = config_output_props, },
-                                        { .name = NULL}},
+    .inputs    = NULL,
+    .outputs   = avfilter_vsrc_movie_outputs,
 };

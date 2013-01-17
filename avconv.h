@@ -113,6 +113,7 @@ typedef struct OptionsContext {
     uint64_t limit_filesize;
     float mux_preload;
     float mux_max_delay;
+    int shortest;
 
     int video_disable;
     int audio_disable;
@@ -157,6 +158,10 @@ typedef struct OptionsContext {
     int        nb_copy_initial_nonkeyframes;
     SpecifierOpt *filters;
     int        nb_filters;
+    SpecifierOpt *pass;
+    int        nb_pass;
+    SpecifierOpt *passlogfiles;
+    int        nb_passlogfiles;
 } OptionsContext;
 
 typedef struct InputFilter {
@@ -273,7 +278,6 @@ typedef struct OutputStream {
     int top_field_first;
 
     float frame_aspect_ratio;
-    float last_quality;
 
     /* forced key frames */
     int64_t *forced_kf_pts;
@@ -281,6 +285,7 @@ typedef struct OutputStream {
     int forced_kf_index;
     char *forced_keyframes;
 
+    char *logfile_prefix;
     FILE *logfile;
 
     OutputFilter *filter;
@@ -293,7 +298,7 @@ typedef struct OutputStream {
     const char *attachment_filename;
     int copy_initial_nonkeyframes;
 
-    enum PixelFormat pix_fmts[2];
+    enum AVPixelFormat pix_fmts[2];
 } OutputStream;
 
 typedef struct OutputFile {
@@ -303,6 +308,8 @@ typedef struct OutputFile {
     int64_t recording_time; /* desired length of the resulting file in microseconds */
     int64_t start_time;     /* start time in microseconds */
     uint64_t limit_filesize;
+
+    int shortest;
 } OutputFile;
 
 extern InputStream **input_streams;
@@ -318,7 +325,6 @@ extern int         nb_output_files;
 extern FilterGraph **filtergraphs;
 extern int        nb_filtergraphs;
 
-extern char *pass_logfilename_prefix;
 extern char *vstats_filename;
 
 extern float audio_drift_threshold;
@@ -333,11 +339,9 @@ extern int do_hex_dump;
 extern int do_pkt_dump;
 extern int copy_ts;
 extern int copy_tb;
-extern int opt_shortest;
 extern int exit_on_error;
 extern int print_stats;
 extern int qp_hist;
-extern int same_quant;
 
 extern const AVIOInterruptCB int_cb;
 
@@ -346,7 +350,7 @@ extern const OptionDef options[];
 void reset_options(OptionsContext *o);
 void show_usage(void);
 
-int opt_cpuflags(const char *opt, const char *arg);
+int opt_cpuflags(void *optctx, const char *opt, const char *arg);
 
 void opt_output_file(void *optctx, const char *filename);
 

@@ -52,20 +52,14 @@
 
         .syntax unified
 T       .thumb
-
-.macro  require8 val=1
-ELF     .eabi_attribute 24, \val
-.endm
-
-.macro  preserve8 val=1
-ELF     .eabi_attribute 25, \val
-.endm
+ELF     .eabi_attribute 25, 1           @ Tag_ABI_align_preserved
 
 .macro  function name, export=0
         .set            .Lpic_idx, 0
         .set            .Lpic_gp, 0
     .macro endfunc
       .if .Lpic_idx
+        .align          2
         .altmacro
         put_pic         %(.Lpic_idx - 1)
         .noaltmacro
@@ -140,9 +134,11 @@ ELF     .size   \name, . - \name
         ldr             \rd, .Lpicoff\@
 .Lpic\@:
     .if \indir
-        ldr             \rd, [pc, \rd]
+A       ldr             \rd, [pc, \rd]
+T       add             \rd, pc
+T       ldr             \rd, [\rd]
     .else
-        add             \rd, pc,  \rd
+        add             \rd, pc
     .endif
         def_pic         \val - (.Lpic\@ + (8 >> CONFIG_THUMB)), .Lpicoff\@
 .endm
@@ -184,6 +180,12 @@ ELF     .size   \name, . - \name
 #else
         movrel          \rd, \val
 #endif
+.endm
+
+.macro  add_sh          rd,  rn,  rm,  sh:vararg
+A       add             \rd, \rn, \rm, \sh
+T       mov             \rm, \rm, \sh
+T       add             \rd, \rn, \rm
 .endm
 
 .macro  ldr_pre         rt,  rn,  rm:vararg

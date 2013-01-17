@@ -46,6 +46,7 @@
 #include "libavutil/opt.h"
 #include "libavutil/pixdesc.h"
 #include "libavutil/x86/asm.h"
+#include "libavutil/x86/cpu.h"
 #include "rgb2rgb.h"
 #include "swscale.h"
 #include "swscale_internal.h"
@@ -72,102 +73,102 @@ typedef struct FormatEntry {
     int is_supported_in, is_supported_out;
 } FormatEntry;
 
-static const FormatEntry format_entries[PIX_FMT_NB] = {
-    [PIX_FMT_YUV420P]     = { 1, 1 },
-    [PIX_FMT_YUYV422]     = { 1, 1 },
-    [PIX_FMT_RGB24]       = { 1, 1 },
-    [PIX_FMT_BGR24]       = { 1, 1 },
-    [PIX_FMT_YUV422P]     = { 1, 1 },
-    [PIX_FMT_YUV444P]     = { 1, 1 },
-    [PIX_FMT_YUV410P]     = { 1, 1 },
-    [PIX_FMT_YUV411P]     = { 1, 1 },
-    [PIX_FMT_GRAY8]       = { 1, 1 },
-    [PIX_FMT_MONOWHITE]   = { 1, 1 },
-    [PIX_FMT_MONOBLACK]   = { 1, 1 },
-    [PIX_FMT_PAL8]        = { 1, 0 },
-    [PIX_FMT_YUVJ420P]    = { 1, 1 },
-    [PIX_FMT_YUVJ422P]    = { 1, 1 },
-    [PIX_FMT_YUVJ444P]    = { 1, 1 },
-    [PIX_FMT_UYVY422]     = { 1, 1 },
-    [PIX_FMT_UYYVYY411]   = { 0, 0 },
-    [PIX_FMT_BGR8]        = { 1, 1 },
-    [PIX_FMT_BGR4]        = { 0, 1 },
-    [PIX_FMT_BGR4_BYTE]   = { 1, 1 },
-    [PIX_FMT_RGB8]        = { 1, 1 },
-    [PIX_FMT_RGB4]        = { 0, 1 },
-    [PIX_FMT_RGB4_BYTE]   = { 1, 1 },
-    [PIX_FMT_NV12]        = { 1, 1 },
-    [PIX_FMT_NV21]        = { 1, 1 },
-    [PIX_FMT_ARGB]        = { 1, 1 },
-    [PIX_FMT_RGBA]        = { 1, 1 },
-    [PIX_FMT_ABGR]        = { 1, 1 },
-    [PIX_FMT_BGRA]        = { 1, 1 },
-    [PIX_FMT_GRAY16BE]    = { 1, 1 },
-    [PIX_FMT_GRAY16LE]    = { 1, 1 },
-    [PIX_FMT_YUV440P]     = { 1, 1 },
-    [PIX_FMT_YUVJ440P]    = { 1, 1 },
-    [PIX_FMT_YUVA420P]    = { 1, 1 },
-    [PIX_FMT_RGB48BE]     = { 1, 1 },
-    [PIX_FMT_RGB48LE]     = { 1, 1 },
-    [PIX_FMT_RGB565BE]    = { 1, 1 },
-    [PIX_FMT_RGB565LE]    = { 1, 1 },
-    [PIX_FMT_RGB555BE]    = { 1, 1 },
-    [PIX_FMT_RGB555LE]    = { 1, 1 },
-    [PIX_FMT_BGR565BE]    = { 1, 1 },
-    [PIX_FMT_BGR565LE]    = { 1, 1 },
-    [PIX_FMT_BGR555BE]    = { 1, 1 },
-    [PIX_FMT_BGR555LE]    = { 1, 1 },
-    [PIX_FMT_YUV420P16LE] = { 1, 1 },
-    [PIX_FMT_YUV420P16BE] = { 1, 1 },
-    [PIX_FMT_YUV422P16LE] = { 1, 1 },
-    [PIX_FMT_YUV422P16BE] = { 1, 1 },
-    [PIX_FMT_YUV444P16LE] = { 1, 1 },
-    [PIX_FMT_YUV444P16BE] = { 1, 1 },
-    [PIX_FMT_RGB444LE]    = { 1, 1 },
-    [PIX_FMT_RGB444BE]    = { 1, 1 },
-    [PIX_FMT_BGR444LE]    = { 1, 1 },
-    [PIX_FMT_BGR444BE]    = { 1, 1 },
-    [PIX_FMT_Y400A]       = { 1, 0 },
-    [PIX_FMT_BGR48BE]     = { 1, 1 },
-    [PIX_FMT_BGR48LE]     = { 1, 1 },
-    [PIX_FMT_YUV420P9BE]  = { 1, 1 },
-    [PIX_FMT_YUV420P9LE]  = { 1, 1 },
-    [PIX_FMT_YUV420P10BE] = { 1, 1 },
-    [PIX_FMT_YUV420P10LE] = { 1, 1 },
-    [PIX_FMT_YUV422P9BE]  = { 1, 1 },
-    [PIX_FMT_YUV422P9LE]  = { 1, 1 },
-    [PIX_FMT_YUV422P10BE] = { 1, 1 },
-    [PIX_FMT_YUV422P10LE] = { 1, 1 },
-    [PIX_FMT_YUV444P9BE]  = { 1, 1 },
-    [PIX_FMT_YUV444P9LE]  = { 1, 1 },
-    [PIX_FMT_YUV444P10BE] = { 1, 1 },
-    [PIX_FMT_YUV444P10LE] = { 1, 1 },
-    [PIX_FMT_GBRP]        = { 1, 0 },
-    [PIX_FMT_GBRP9LE]     = { 1, 0 },
-    [PIX_FMT_GBRP9BE]     = { 1, 0 },
-    [PIX_FMT_GBRP10LE]    = { 1, 0 },
-    [PIX_FMT_GBRP10BE]    = { 1, 0 },
-    [PIX_FMT_GBRP16LE]    = { 1, 0 },
-    [PIX_FMT_GBRP16BE]    = { 1, 0 },
+static const FormatEntry format_entries[AV_PIX_FMT_NB] = {
+    [AV_PIX_FMT_YUV420P]     = { 1, 1 },
+    [AV_PIX_FMT_YUYV422]     = { 1, 1 },
+    [AV_PIX_FMT_RGB24]       = { 1, 1 },
+    [AV_PIX_FMT_BGR24]       = { 1, 1 },
+    [AV_PIX_FMT_YUV422P]     = { 1, 1 },
+    [AV_PIX_FMT_YUV444P]     = { 1, 1 },
+    [AV_PIX_FMT_YUV410P]     = { 1, 1 },
+    [AV_PIX_FMT_YUV411P]     = { 1, 1 },
+    [AV_PIX_FMT_GRAY8]       = { 1, 1 },
+    [AV_PIX_FMT_MONOWHITE]   = { 1, 1 },
+    [AV_PIX_FMT_MONOBLACK]   = { 1, 1 },
+    [AV_PIX_FMT_PAL8]        = { 1, 0 },
+    [AV_PIX_FMT_YUVJ420P]    = { 1, 1 },
+    [AV_PIX_FMT_YUVJ422P]    = { 1, 1 },
+    [AV_PIX_FMT_YUVJ444P]    = { 1, 1 },
+    [AV_PIX_FMT_UYVY422]     = { 1, 1 },
+    [AV_PIX_FMT_UYYVYY411]   = { 0, 0 },
+    [AV_PIX_FMT_BGR8]        = { 1, 1 },
+    [AV_PIX_FMT_BGR4]        = { 0, 1 },
+    [AV_PIX_FMT_BGR4_BYTE]   = { 1, 1 },
+    [AV_PIX_FMT_RGB8]        = { 1, 1 },
+    [AV_PIX_FMT_RGB4]        = { 0, 1 },
+    [AV_PIX_FMT_RGB4_BYTE]   = { 1, 1 },
+    [AV_PIX_FMT_NV12]        = { 1, 1 },
+    [AV_PIX_FMT_NV21]        = { 1, 1 },
+    [AV_PIX_FMT_ARGB]        = { 1, 1 },
+    [AV_PIX_FMT_RGBA]        = { 1, 1 },
+    [AV_PIX_FMT_ABGR]        = { 1, 1 },
+    [AV_PIX_FMT_BGRA]        = { 1, 1 },
+    [AV_PIX_FMT_GRAY16BE]    = { 1, 1 },
+    [AV_PIX_FMT_GRAY16LE]    = { 1, 1 },
+    [AV_PIX_FMT_YUV440P]     = { 1, 1 },
+    [AV_PIX_FMT_YUVJ440P]    = { 1, 1 },
+    [AV_PIX_FMT_YUVA420P]    = { 1, 1 },
+    [AV_PIX_FMT_RGB48BE]     = { 1, 1 },
+    [AV_PIX_FMT_RGB48LE]     = { 1, 1 },
+    [AV_PIX_FMT_RGB565BE]    = { 1, 1 },
+    [AV_PIX_FMT_RGB565LE]    = { 1, 1 },
+    [AV_PIX_FMT_RGB555BE]    = { 1, 1 },
+    [AV_PIX_FMT_RGB555LE]    = { 1, 1 },
+    [AV_PIX_FMT_BGR565BE]    = { 1, 1 },
+    [AV_PIX_FMT_BGR565LE]    = { 1, 1 },
+    [AV_PIX_FMT_BGR555BE]    = { 1, 1 },
+    [AV_PIX_FMT_BGR555LE]    = { 1, 1 },
+    [AV_PIX_FMT_YUV420P16LE] = { 1, 1 },
+    [AV_PIX_FMT_YUV420P16BE] = { 1, 1 },
+    [AV_PIX_FMT_YUV422P16LE] = { 1, 1 },
+    [AV_PIX_FMT_YUV422P16BE] = { 1, 1 },
+    [AV_PIX_FMT_YUV444P16LE] = { 1, 1 },
+    [AV_PIX_FMT_YUV444P16BE] = { 1, 1 },
+    [AV_PIX_FMT_RGB444LE]    = { 1, 1 },
+    [AV_PIX_FMT_RGB444BE]    = { 1, 1 },
+    [AV_PIX_FMT_BGR444LE]    = { 1, 1 },
+    [AV_PIX_FMT_BGR444BE]    = { 1, 1 },
+    [AV_PIX_FMT_Y400A]       = { 1, 0 },
+    [AV_PIX_FMT_BGR48BE]     = { 1, 1 },
+    [AV_PIX_FMT_BGR48LE]     = { 1, 1 },
+    [AV_PIX_FMT_YUV420P9BE]  = { 1, 1 },
+    [AV_PIX_FMT_YUV420P9LE]  = { 1, 1 },
+    [AV_PIX_FMT_YUV420P10BE] = { 1, 1 },
+    [AV_PIX_FMT_YUV420P10LE] = { 1, 1 },
+    [AV_PIX_FMT_YUV422P9BE]  = { 1, 1 },
+    [AV_PIX_FMT_YUV422P9LE]  = { 1, 1 },
+    [AV_PIX_FMT_YUV422P10BE] = { 1, 1 },
+    [AV_PIX_FMT_YUV422P10LE] = { 1, 1 },
+    [AV_PIX_FMT_YUV444P9BE]  = { 1, 1 },
+    [AV_PIX_FMT_YUV444P9LE]  = { 1, 1 },
+    [AV_PIX_FMT_YUV444P10BE] = { 1, 1 },
+    [AV_PIX_FMT_YUV444P10LE] = { 1, 1 },
+    [AV_PIX_FMT_GBRP]        = { 1, 0 },
+    [AV_PIX_FMT_GBRP9LE]     = { 1, 0 },
+    [AV_PIX_FMT_GBRP9BE]     = { 1, 0 },
+    [AV_PIX_FMT_GBRP10LE]    = { 1, 0 },
+    [AV_PIX_FMT_GBRP10BE]    = { 1, 0 },
+    [AV_PIX_FMT_GBRP16LE]    = { 1, 0 },
+    [AV_PIX_FMT_GBRP16BE]    = { 1, 0 },
 };
 
-int sws_isSupportedInput(enum PixelFormat pix_fmt)
+int sws_isSupportedInput(enum AVPixelFormat pix_fmt)
 {
-    return (unsigned)pix_fmt < PIX_FMT_NB ?
+    return (unsigned)pix_fmt < AV_PIX_FMT_NB ?
            format_entries[pix_fmt].is_supported_in : 0;
 }
 
-int sws_isSupportedOutput(enum PixelFormat pix_fmt)
+int sws_isSupportedOutput(enum AVPixelFormat pix_fmt)
 {
-    return (unsigned)pix_fmt < PIX_FMT_NB ?
+    return (unsigned)pix_fmt < AV_PIX_FMT_NB ?
            format_entries[pix_fmt].is_supported_out : 0;
 }
 
 extern const int32_t ff_yuv2rgb_coeffs[8][4];
 
-const char *sws_format_name(enum PixelFormat format)
+const char *sws_format_name(enum AVPixelFormat format)
 {
-    if ((unsigned)format < PIX_FMT_NB && av_pix_fmt_descriptors[format].name)
+    if ((unsigned)format < AV_PIX_FMT_NB && av_pix_fmt_descriptors[format].name)
         return av_pix_fmt_descriptors[format].name;
     else
         return "Unknown format";
@@ -473,7 +474,7 @@ static int initFilter(int16_t **outFilter, int32_t **filterPos,
             filterAlign = 1;
     }
 
-    if (HAVE_MMX && cpu_flags & AV_CPU_FLAG_MMX) {
+    if (INLINE_MMX(cpu_flags)) {
         // special case for unscaled vertical filtering
         if (minFilterSize == 1 && filterAlign == 2)
             filterAlign = 1;
@@ -577,7 +578,7 @@ fail:
     return ret;
 }
 
-#if HAVE_MMXEXT && HAVE_INLINE_ASM
+#if HAVE_MMXEXT_INLINE
 static int initMMX2HScaler(int dstW, int xInc, uint8_t *filterCode,
                            int16_t *filter, int32_t *filterPos, int numSplits)
 {
@@ -740,9 +741,9 @@ static int initMMX2HScaler(int dstW, int xInc, uint8_t *filterCode,
 
     return fragmentPos + 1;
 }
-#endif /* HAVE_MMXEXT && HAVE_INLINE_ASM */
+#endif /* HAVE_MMXEXT_INLINE */
 
-static void getSubSampleFactors(int *h, int *v, enum PixelFormat format)
+static void getSubSampleFactors(int *h, int *v, enum AVPixelFormat format)
 {
     *h = av_pix_fmt_descriptors[format].log2_chroma_w;
     *v = av_pix_fmt_descriptors[format].log2_chroma_h;
@@ -794,20 +795,20 @@ int sws_getColorspaceDetails(struct SwsContext *c, int **inv_table,
     return 0;
 }
 
-static int handle_jpeg(enum PixelFormat *format)
+static int handle_jpeg(enum AVPixelFormat *format)
 {
     switch (*format) {
-    case PIX_FMT_YUVJ420P:
-        *format = PIX_FMT_YUV420P;
+    case AV_PIX_FMT_YUVJ420P:
+        *format = AV_PIX_FMT_YUV420P;
         return 1;
-    case PIX_FMT_YUVJ422P:
-        *format = PIX_FMT_YUV422P;
+    case AV_PIX_FMT_YUVJ422P:
+        *format = AV_PIX_FMT_YUV422P;
         return 1;
-    case PIX_FMT_YUVJ444P:
-        *format = PIX_FMT_YUV444P;
+    case AV_PIX_FMT_YUVJ444P:
+        *format = AV_PIX_FMT_YUV444P;
         return 1;
-    case PIX_FMT_YUVJ440P:
-        *format = PIX_FMT_YUV440P;
+    case AV_PIX_FMT_YUVJ440P:
+        *format = AV_PIX_FMT_YUV440P;
         return 1;
     default:
         return 0;
@@ -838,8 +839,8 @@ av_cold int sws_init_context(SwsContext *c, SwsFilter *srcFilter,
     int dst_stride        = FFALIGN(dstW * sizeof(int16_t) + 16, 16);
     int dst_stride_px     = dst_stride >> 1;
     int flags, cpu_flags;
-    enum PixelFormat srcFormat = c->srcFormat;
-    enum PixelFormat dstFormat = c->dstFormat;
+    enum AVPixelFormat srcFormat = c->srcFormat;
+    enum AVPixelFormat dstFormat = c->dstFormat;
 
     cpu_flags = av_get_cpu_flags();
     flags     = c->flags;
@@ -912,12 +913,12 @@ av_cold int sws_init_context(SwsContext *c, SwsFilter *srcFilter,
      * chroma interpolation */
     if (flags & SWS_FULL_CHR_H_INT &&
         isAnyRGB(dstFormat)        &&
-        dstFormat != PIX_FMT_RGBA  &&
-        dstFormat != PIX_FMT_ARGB  &&
-        dstFormat != PIX_FMT_BGRA  &&
-        dstFormat != PIX_FMT_ABGR  &&
-        dstFormat != PIX_FMT_RGB24 &&
-        dstFormat != PIX_FMT_BGR24) {
+        dstFormat != AV_PIX_FMT_RGBA  &&
+        dstFormat != AV_PIX_FMT_ARGB  &&
+        dstFormat != AV_PIX_FMT_BGRA  &&
+        dstFormat != AV_PIX_FMT_ABGR  &&
+        dstFormat != AV_PIX_FMT_RGB24 &&
+        dstFormat != AV_PIX_FMT_BGR24) {
         av_log(c, AV_LOG_ERROR,
                "full chroma interpolation for destination format '%s' not yet implemented\n",
                sws_format_name(dstFormat));
@@ -935,9 +936,9 @@ av_cold int sws_init_context(SwsContext *c, SwsFilter *srcFilter,
     /* drop every other pixel for chroma calculation unless user
      * wants full chroma */
     if (isAnyRGB(srcFormat) && !(flags & SWS_FULL_CHR_H_INP)   &&
-        srcFormat != PIX_FMT_RGB8 && srcFormat != PIX_FMT_BGR8 &&
-        srcFormat != PIX_FMT_RGB4 && srcFormat != PIX_FMT_BGR4 &&
-        srcFormat != PIX_FMT_RGB4_BYTE && srcFormat != PIX_FMT_BGR4_BYTE &&
+        srcFormat != AV_PIX_FMT_RGB8 && srcFormat != AV_PIX_FMT_BGR8 &&
+        srcFormat != AV_PIX_FMT_RGB4 && srcFormat != AV_PIX_FMT_BGR4 &&
+        srcFormat != AV_PIX_FMT_RGB4_BYTE && srcFormat != AV_PIX_FMT_BGR4_BYTE &&
         ((dstW >> c->chrDstHSubSample) <= (srcW >> 1) ||
          (flags & SWS_FAST_BILINEAR)))
         c->chrSrcHSubSample = 1;
@@ -973,8 +974,7 @@ av_cold int sws_init_context(SwsContext *c, SwsFilter *srcFilter,
     FF_ALLOC_OR_GOTO(c, c->formatConvBuffer,
                      (FFALIGN(srcW, 16) * 2 * FFALIGN(c->srcBpc, 8) >> 3) + 16,
                      fail);
-    if (HAVE_MMXEXT && HAVE_INLINE_ASM && cpu_flags & AV_CPU_FLAG_MMXEXT &&
-        c->srcBpc == 8 && c->dstBpc <= 10) {
+    if (INLINE_MMXEXT(cpu_flags) && c->srcBpc == 8 && c->dstBpc <= 10) {
         c->canMMX2BeUsed = (dstW >= srcW && (dstW & 31) == 0 &&
                             (srcW & 15) == 0) ? 1 : 0;
         if (!c->canMMX2BeUsed && dstW >= srcW && (srcW & 15) == 0
@@ -1004,7 +1004,7 @@ av_cold int sws_init_context(SwsContext *c, SwsFilter *srcFilter,
             c->chrXInc += 20;
         }
         // we don't use the x86 asm scaler if MMX is available
-        else if (HAVE_MMX && cpu_flags & AV_CPU_FLAG_MMX) {
+        else if (INLINE_MMX(cpu_flags)) {
             c->lumXInc = ((int64_t)(srcW       - 2) << 16) / (dstW       - 2) - 20;
             c->chrXInc = ((int64_t)(c->chrSrcW - 2) << 16) / (c->chrDstW - 2) - 20;
         }
@@ -1012,7 +1012,7 @@ av_cold int sws_init_context(SwsContext *c, SwsFilter *srcFilter,
 
     /* precalculate horizontal scaler filter coefficients */
     {
-#if HAVE_MMXEXT && HAVE_INLINE_ASM
+#if HAVE_MMXEXT_INLINE
 // can't downscale !!!
         if (c->canMMX2BeUsed && (flags & SWS_FAST_BILINEAR)) {
             c->lumMmx2FilterCodeSize = initMMX2HScaler(dstW, c->lumXInc, NULL,
@@ -1048,7 +1048,7 @@ av_cold int sws_init_context(SwsContext *c, SwsFilter *srcFilter,
             mprotect(c->chrMmx2FilterCode, c->chrMmx2FilterCodeSize, PROT_EXEC | PROT_READ);
 #endif
         } else
-#endif /* HAVE_MMXEXT && HAVE_INLINE_ASM */
+#endif /* HAVE_MMXEXT_INLINE */
         {
             const int filterAlign =
                 (HAVE_MMX && cpu_flags & AV_CPU_FLAG_MMX) ? 4 :
@@ -1199,20 +1199,20 @@ av_cold int sws_init_context(SwsContext *c, SwsFilter *srcFilter,
         av_log(c, AV_LOG_INFO, "from %s to %s%s ",
                sws_format_name(srcFormat),
 #ifdef DITHER1XBPP
-               dstFormat == PIX_FMT_BGR555   || dstFormat == PIX_FMT_BGR565   ||
-               dstFormat == PIX_FMT_RGB444BE || dstFormat == PIX_FMT_RGB444LE ||
-               dstFormat == PIX_FMT_BGR444BE || dstFormat == PIX_FMT_BGR444LE ?
+               dstFormat == AV_PIX_FMT_BGR555   || dstFormat == AV_PIX_FMT_BGR565   ||
+               dstFormat == AV_PIX_FMT_RGB444BE || dstFormat == AV_PIX_FMT_RGB444LE ||
+               dstFormat == AV_PIX_FMT_BGR444BE || dstFormat == AV_PIX_FMT_BGR444LE ?
                                                              "dithered " : "",
 #else
                "",
 #endif
                sws_format_name(dstFormat));
 
-        if (HAVE_MMXEXT && cpu_flags & AV_CPU_FLAG_MMXEXT)
+        if (INLINE_MMXEXT(cpu_flags))
             av_log(c, AV_LOG_INFO, "using MMX2\n");
-        else if (HAVE_AMD3DNOW && cpu_flags & AV_CPU_FLAG_3DNOW)
+        else if (INLINE_AMD3DNOW(cpu_flags))
             av_log(c, AV_LOG_INFO, "using 3DNOW\n");
-        else if (HAVE_MMX && cpu_flags & AV_CPU_FLAG_MMX)
+        else if (INLINE_MMX(cpu_flags))
             av_log(c, AV_LOG_INFO, "using MMX\n");
         else if (HAVE_ALTIVEC && cpu_flags & AV_CPU_FLAG_ALTIVEC)
             av_log(c, AV_LOG_INFO, "using AltiVec\n");
@@ -1236,8 +1236,8 @@ fail: // FIXME replace things by appropriate error codes
 }
 
 #if FF_API_SWS_GETCONTEXT
-SwsContext *sws_getContext(int srcW, int srcH, enum PixelFormat srcFormat,
-                           int dstW, int dstH, enum PixelFormat dstFormat,
+SwsContext *sws_getContext(int srcW, int srcH, enum AVPixelFormat srcFormat,
+                           int dstW, int dstH, enum AVPixelFormat dstFormat,
                            int flags, SwsFilter *srcFilter,
                            SwsFilter *dstFilter, const double *param)
 {
@@ -1621,7 +1621,7 @@ void sws_freeContext(SwsContext *c)
     av_freep(&c->hLumFilterPos);
     av_freep(&c->hChrFilterPos);
 
-#if HAVE_MMX
+#if HAVE_MMX_INLINE
 #ifdef MAP_ANONYMOUS
     if (c->lumMmx2FilterCode)
         munmap(c->lumMmx2FilterCode, c->lumMmx2FilterCodeSize);
@@ -1638,7 +1638,7 @@ void sws_freeContext(SwsContext *c)
 #endif
     c->lumMmx2FilterCode = NULL;
     c->chrMmx2FilterCode = NULL;
-#endif /* HAVE_MMX */
+#endif /* HAVE_MMX_INLINE */
 
     av_freep(&c->yuvTable);
     av_free(c->formatConvBuffer);
@@ -1647,9 +1647,9 @@ void sws_freeContext(SwsContext *c)
 }
 
 struct SwsContext *sws_getCachedContext(struct SwsContext *context, int srcW,
-                                        int srcH, enum PixelFormat srcFormat,
+                                        int srcH, enum AVPixelFormat srcFormat,
                                         int dstW, int dstH,
-                                        enum PixelFormat dstFormat, int flags,
+                                        enum AVPixelFormat dstFormat, int flags,
                                         SwsFilter *srcFilter,
                                         SwsFilter *dstFilter,
                                         const double *param)

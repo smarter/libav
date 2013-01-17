@@ -65,17 +65,17 @@ void log_callback_help(void* ptr, int level, const char* fmt, va_list vl);
  * Fallback for options that are not explicitly handled, these will be
  * parsed through AVOptions.
  */
-int opt_default(const char *opt, const char *arg);
+int opt_default(void *optctx, const char *opt, const char *arg);
 
 /**
  * Set the libav* libraries log level.
  */
-int opt_loglevel(const char *opt, const char *arg);
+int opt_loglevel(void *optctx, const char *opt, const char *arg);
 
 /**
  * Limit the execution time.
  */
-int opt_timelimit(const char *opt, const char *arg);
+int opt_timelimit(void *optctx, const char *opt, const char *arg);
 
 /**
  * Parse a string and return its corresponding value as a double.
@@ -121,7 +121,7 @@ typedef struct SpecifierOpt {
     } u;
 } SpecifierOpt;
 
-typedef struct {
+typedef struct OptionDef {
     const char *name;
     int flags;
 #define HAS_ARG    0x0001
@@ -130,14 +130,14 @@ typedef struct {
 #define OPT_STRING 0x0008
 #define OPT_VIDEO  0x0010
 #define OPT_AUDIO  0x0020
-#define OPT_GRAB   0x0040
 #define OPT_INT    0x0080
 #define OPT_FLOAT  0x0100
 #define OPT_SUBTITLE 0x0200
 #define OPT_INT64  0x0400
 #define OPT_EXIT   0x0800
 #define OPT_DATA   0x1000
-#define OPT_FUNC2  0x2000
+#define OPT_PERFILE  0x2000     /* the option is per-file (currently avconv-only).
+                                   implied by OPT_OFFSET or OPT_SPEC */
 #define OPT_OFFSET 0x4000       /* option is specified as an offset in a passed optctx */
 #define OPT_SPEC   0x8000       /* option is to be stored in an array of SpecifierOpt.
                                    Implies OPT_OFFSET. Next element after the offset is
@@ -146,22 +146,41 @@ typedef struct {
 #define OPT_DOUBLE 0x20000
      union {
         void *dst_ptr;
-        int (*func_arg)(const char *, const char *);
-        int (*func2_arg)(void *, const char *, const char *);
+        int (*func_arg)(void *, const char *, const char *);
         size_t off;
     } u;
     const char *help;
     const char *argname;
 } OptionDef;
 
-void show_help_options(const OptionDef *options, const char *msg, int mask,
-                       int value);
+/**
+ * Print help for all options matching specified flags.
+ *
+ * @param options a list of options
+ * @param msg title of this group. Only printed if at least one option matches.
+ * @param req_flags print only options which have all those flags set.
+ * @param rej_flags don't print options which have any of those flags set.
+ * @param alt_flags print only options that have at least one of those flags set
+ */
+void show_help_options(const OptionDef *options, const char *msg, int req_flags,
+                       int rej_flags, int alt_flags);
 
 /**
  * Show help for all options with given flags in class and all its
  * children.
  */
 void show_help_children(const AVClass *class, int flags);
+
+/**
+ * Per-avtool specific help handler. Implemented in each
+ * avtool, called by show_help().
+ */
+void show_help_default(const char *opt, const char *arg);
+
+/**
+ * Generic -h handler common to all avtools.
+ */
+int show_help(void *optctx, const char *opt, const char *arg);
 
 /**
  * Parse the command line arguments.
@@ -258,55 +277,67 @@ void show_banner(void);
  * depends on the current versions of the repository and of the libav*
  * libraries.
  */
-void show_version(void);
+int show_version(void *optctx, const char *opt, const char *arg);
 
 /**
  * Print the license of the program to stdout. The license depends on
  * the license of the libraries compiled into the program.
  */
-void show_license(void);
+int show_license(void *optctx, const char *opt, const char *arg);
 
 /**
  * Print a listing containing all the formats supported by the
  * program.
  */
-void show_formats(void);
+int show_formats(void *optctx, const char *opt, const char *arg);
 
 /**
  * Print a listing containing all the codecs supported by the
  * program.
  */
-void show_codecs(void);
+int show_codecs(void *optctx, const char *opt, const char *arg);
+
+/**
+ * Print a listing containing all the decoders supported by the
+ * program.
+ */
+int show_decoders(void *optctx, const char *opt, const char *arg);
+
+/**
+ * Print a listing containing all the encoders supported by the
+ * program.
+ */
+int show_encoders(void *optctx, const char *opt, const char *arg);
 
 /**
  * Print a listing containing all the filters supported by the
  * program.
  */
-void show_filters(void);
+int show_filters(void *optctx, const char *opt, const char *arg);
 
 /**
  * Print a listing containing all the bit stream filters supported by the
  * program.
  */
-void show_bsfs(void);
+int show_bsfs(void *optctx, const char *opt, const char *arg);
 
 /**
  * Print a listing containing all the protocols supported by the
  * program.
  */
-void show_protocols(void);
+int show_protocols(void *optctx, const char *opt, const char *arg);
 
 /**
  * Print a listing containing all the pixel formats supported by the
  * program.
  */
-void show_pix_fmts(void);
+int show_pix_fmts(void *optctx, const char *opt, const char *arg);
 
 /**
  * Print a listing containing all the sample formats supported by the
  * program.
  */
-int show_sample_fmts(const char *opt, const char *arg);
+int show_sample_fmts(void *optctx, const char *opt, const char *arg);
 
 /**
  * Return a positive value if a line read from standard input
@@ -325,7 +356,7 @@ int read_yesno(void);
  */
 int cmdutils_read_file(const char *filename, char **bufptr, size_t *size);
 
-typedef struct {
+typedef struct PtsCorrectionContext {
     int64_t num_faulty_pts; /// Number of incorrect PTS values so far
     int64_t num_faulty_dts; /// Number of incorrect DTS values so far
     int64_t last_pts;       /// PTS of the last frame
@@ -370,14 +401,8 @@ FILE *get_preset_file(char *filename, size_t filename_size,
                       const char *preset_name, int is_path, const char *codec_name);
 
 /**
- * Do all the necessary cleanup and abort.
- * This function is implemented in the avtools, not cmdutils.
- */
-av_noreturn void exit_program(int ret);
-
-/**
  * Realloc array to hold new_size elements of elem_size.
- * Calls exit_program() on failure.
+ * Calls exit() on failure.
  *
  * @param elem_size size in bytes of each element
  * @param size new element count will be written here
@@ -391,7 +416,7 @@ typedef struct FrameBuffer {
     int  linesize[4];
 
     int h, w;
-    enum PixelFormat pix_fmt;
+    enum AVPixelFormat pix_fmt;
 
     int refcount;
     struct FrameBuffer **pool;  ///< head of the buffer pool
@@ -427,4 +452,23 @@ void filter_release_buffer(AVFilterBuffer *fb);
  * buffers have been released.
  */
 void free_buffer_pool(FrameBuffer **pool);
+
+#define GET_PIX_FMT_NAME(pix_fmt)\
+    const char *name = av_get_pix_fmt_name(pix_fmt);
+
+#define GET_SAMPLE_FMT_NAME(sample_fmt)\
+    const char *name = av_get_sample_fmt_name(sample_fmt)
+
+#define GET_SAMPLE_RATE_NAME(rate)\
+    char name[16];\
+    snprintf(name, sizeof(name), "%d", rate);
+
+#define GET_CH_LAYOUT_NAME(ch_layout)\
+    char name[16];\
+    snprintf(name, sizeof(name), "0x%"PRIx64, ch_layout);
+
+#define GET_CH_LAYOUT_DESC(ch_layout)\
+    char name[128];\
+    av_get_channel_layout_string(name, sizeof(name), 0, ch_layout);
+
 #endif /* LIBAV_CMDUTILS_H */

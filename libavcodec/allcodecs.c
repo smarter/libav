@@ -125,6 +125,7 @@ void avcodec_register_all(void)
     REGISTER_ENCODER (H263P, h263p);
     REGISTER_DECODER (H264, h264);
     REGISTER_DECODER (H264_VDPAU, h264_vdpau);
+    REGISTER_DECODER (HEVC, hevc);
     REGISTER_ENCDEC  (HUFFYUV, huffyuv);
     REGISTER_DECODER (IDCIN, idcin);
     REGISTER_DECODER (IFF_BYTERUN1, iff_byterun1);
@@ -160,6 +161,7 @@ void avcodec_register_all(void)
     REGISTER_ENCDEC  (MSMPEG4V3, msmpeg4v3);
     REGISTER_DECODER (MSRLE, msrle);
     REGISTER_DECODER (MSS1, mss1);
+    REGISTER_DECODER (MSS2, mss2);
     REGISTER_DECODER (MSVIDEO1, msvideo1);
     REGISTER_DECODER (MSZH, mszh);
     REGISTER_DECODER (MTS2, mts2);
@@ -209,7 +211,7 @@ void avcodec_register_all(void)
     REGISTER_DECODER (TSCC2, tscc2);
     REGISTER_DECODER (TXD, txd);
     REGISTER_DECODER (ULTI, ulti);
-    REGISTER_DECODER (UTVIDEO, utvideo);
+    REGISTER_ENCDEC  (UTVIDEO, utvideo);
     REGISTER_ENCDEC  (V210,  v210);
     REGISTER_DECODER (V210X, v210x);
     REGISTER_ENCDEC  (V410, v410);
@@ -392,6 +394,7 @@ void avcodec_register_all(void)
     REGISTER_ENCDEC  (LIBOPENCORE_AMRNB, libopencore_amrnb);
     REGISTER_DECODER (LIBOPENCORE_AMRWB, libopencore_amrwb);
     REGISTER_ENCDEC  (LIBOPENJPEG, libopenjpeg);
+    REGISTER_ENCDEC  (LIBOPUS, libopus);
     REGISTER_ENCDEC  (LIBSCHROEDINGER, libschroedinger);
     REGISTER_ENCDEC  (LIBSPEEX, libspeex);
     REGISTER_ENCODER (LIBTHEORA, libtheora);
@@ -420,6 +423,7 @@ void avcodec_register_all(void)
     REGISTER_PARSER  (H261, h261);
     REGISTER_PARSER  (H263, h263);
     REGISTER_PARSER  (H264, h264);
+    REGISTER_PARSER  (HEVC, hevc);
     REGISTER_PARSER  (MJPEG, mjpeg);
     REGISTER_PARSER  (MLP, mlp);
     REGISTER_PARSER  (MPEG4VIDEO, mpeg4video);
