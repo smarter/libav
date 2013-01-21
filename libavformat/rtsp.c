@@ -64,29 +64,29 @@
 #define ENC AV_OPT_FLAG_ENCODING_PARAM
 
 #define RTSP_FLAG_OPTS(name, longname) \
-    { name, longname, OFFSET(rtsp_flags), AV_OPT_TYPE_FLAGS, {0}, INT_MIN, INT_MAX, DEC, "rtsp_flags" }, \
-    { "filter_src", "Only receive packets from the negotiated peer IP", 0, AV_OPT_TYPE_CONST, {RTSP_FLAG_FILTER_SRC}, 0, 0, DEC, "rtsp_flags" }, \
-    { "listen", "Wait for incoming connections", 0, AV_OPT_TYPE_CONST, {RTSP_FLAG_LISTEN}, 0, 0, DEC, "rtsp_flags" }
+    { name, longname, OFFSET(rtsp_flags), AV_OPT_TYPE_FLAGS, {.i64 = 0}, INT_MIN, INT_MAX, DEC, "rtsp_flags" }, \
+    { "filter_src", "Only receive packets from the negotiated peer IP", 0, AV_OPT_TYPE_CONST, {.i64 = RTSP_FLAG_FILTER_SRC}, 0, 0, DEC, "rtsp_flags" }, \
+    { "listen", "Wait for incoming connections", 0, AV_OPT_TYPE_CONST, {.i64 = RTSP_FLAG_LISTEN}, 0, 0, DEC, "rtsp_flags" }
 
 #define RTSP_MEDIATYPE_OPTS(name, longname) \
-    { name, longname, OFFSET(media_type_mask), AV_OPT_TYPE_FLAGS, { (1 << (AVMEDIA_TYPE_DATA+1)) - 1 }, INT_MIN, INT_MAX, DEC, "allowed_media_types" }, \
-    { "video", "Video", 0, AV_OPT_TYPE_CONST, {1 << AVMEDIA_TYPE_VIDEO}, 0, 0, DEC, "allowed_media_types" }, \
-    { "audio", "Audio", 0, AV_OPT_TYPE_CONST, {1 << AVMEDIA_TYPE_AUDIO}, 0, 0, DEC, "allowed_media_types" }, \
-    { "data", "Data", 0, AV_OPT_TYPE_CONST, {1 << AVMEDIA_TYPE_DATA}, 0, 0, DEC, "allowed_media_types" }
+    { name, longname, OFFSET(media_type_mask), AV_OPT_TYPE_FLAGS, { .i64 = (1 << (AVMEDIA_TYPE_DATA+1)) - 1 }, INT_MIN, INT_MAX, DEC, "allowed_media_types" }, \
+    { "video", "Video", 0, AV_OPT_TYPE_CONST, {.i64 = 1 << AVMEDIA_TYPE_VIDEO}, 0, 0, DEC, "allowed_media_types" }, \
+    { "audio", "Audio", 0, AV_OPT_TYPE_CONST, {.i64 = 1 << AVMEDIA_TYPE_AUDIO}, 0, 0, DEC, "allowed_media_types" }, \
+    { "data", "Data", 0, AV_OPT_TYPE_CONST, {.i64 = 1 << AVMEDIA_TYPE_DATA}, 0, 0, DEC, "allowed_media_types" }
 
 const AVOption ff_rtsp_options[] = {
-    { "initial_pause",  "Don't start playing the stream immediately", OFFSET(initial_pause), AV_OPT_TYPE_INT, {0}, 0, 1, DEC },
+    { "initial_pause",  "Don't start playing the stream immediately", OFFSET(initial_pause), AV_OPT_TYPE_INT, {.i64 = 0}, 0, 1, DEC },
     FF_RTP_FLAG_OPTS(RTSPState, rtp_muxer_flags),
-    { "rtsp_transport", "RTSP transport protocols", OFFSET(lower_transport_mask), AV_OPT_TYPE_FLAGS, {0}, INT_MIN, INT_MAX, DEC|ENC, "rtsp_transport" }, \
-    { "udp", "UDP", 0, AV_OPT_TYPE_CONST, {1 << RTSP_LOWER_TRANSPORT_UDP}, 0, 0, DEC|ENC, "rtsp_transport" }, \
-    { "tcp", "TCP", 0, AV_OPT_TYPE_CONST, {1 << RTSP_LOWER_TRANSPORT_TCP}, 0, 0, DEC|ENC, "rtsp_transport" }, \
-    { "udp_multicast", "UDP multicast", 0, AV_OPT_TYPE_CONST, {1 << RTSP_LOWER_TRANSPORT_UDP_MULTICAST}, 0, 0, DEC, "rtsp_transport" },
-    { "http", "HTTP tunneling", 0, AV_OPT_TYPE_CONST, {(1 << RTSP_LOWER_TRANSPORT_HTTP)}, 0, 0, DEC, "rtsp_transport" },
+    { "rtsp_transport", "RTSP transport protocols", OFFSET(lower_transport_mask), AV_OPT_TYPE_FLAGS, {.i64 = 0}, INT_MIN, INT_MAX, DEC|ENC, "rtsp_transport" }, \
+    { "udp", "UDP", 0, AV_OPT_TYPE_CONST, {.i64 = 1 << RTSP_LOWER_TRANSPORT_UDP}, 0, 0, DEC|ENC, "rtsp_transport" }, \
+    { "tcp", "TCP", 0, AV_OPT_TYPE_CONST, {.i64 = 1 << RTSP_LOWER_TRANSPORT_TCP}, 0, 0, DEC|ENC, "rtsp_transport" }, \
+    { "udp_multicast", "UDP multicast", 0, AV_OPT_TYPE_CONST, {.i64 = 1 << RTSP_LOWER_TRANSPORT_UDP_MULTICAST}, 0, 0, DEC, "rtsp_transport" },
+    { "http", "HTTP tunneling", 0, AV_OPT_TYPE_CONST, {.i64 = (1 << RTSP_LOWER_TRANSPORT_HTTP)}, 0, 0, DEC, "rtsp_transport" },
     RTSP_FLAG_OPTS("rtsp_flags", "RTSP flags"),
     RTSP_MEDIATYPE_OPTS("allowed_media_types", "Media types to accept from the server"),
-    { "min_port", "Minimum local UDP port", OFFSET(rtp_port_min), AV_OPT_TYPE_INT, {RTSP_RTP_PORT_MIN}, 0, 65535, DEC|ENC },
-    { "max_port", "Maximum local UDP port", OFFSET(rtp_port_max), AV_OPT_TYPE_INT, {RTSP_RTP_PORT_MAX}, 0, 65535, DEC|ENC },
-    { "timeout", "Maximum timeout (in seconds) to wait for incoming connections. -1 is infinite. Implies flag listen", OFFSET(initial_timeout), AV_OPT_TYPE_INT, {-1}, INT_MIN, INT_MAX, DEC },
+    { "min_port", "Minimum local UDP port", OFFSET(rtp_port_min), AV_OPT_TYPE_INT, {.i64 = RTSP_RTP_PORT_MIN}, 0, 65535, DEC|ENC },
+    { "max_port", "Maximum local UDP port", OFFSET(rtp_port_max), AV_OPT_TYPE_INT, {.i64 = RTSP_RTP_PORT_MAX}, 0, 65535, DEC|ENC },
+    { "timeout", "Maximum timeout (in seconds) to wait for incoming connections. -1 is infinite. Implies flag listen", OFFSET(initial_timeout), AV_OPT_TYPE_INT, {.i64 = -1}, INT_MIN, INT_MAX, DEC },
     { NULL },
 };
 
@@ -154,8 +154,6 @@ static void rtsp_parse_range_npt(const char *p, int64_t *start, int64_t *end)
         get_word_sep(buf, sizeof(buf), "-", &p);
         av_parse_time(end, buf, 1);
     }
-//    av_log(NULL, AV_LOG_DEBUG, "Range Start: %lld\n", *start);
-//    av_log(NULL, AV_LOG_DEBUG, "Range End: %lld\n", *end);
 }
 
 static int get_sockaddr(const char *buf, struct sockaddr_storage *sock)
@@ -568,7 +566,7 @@ void ff_rtsp_undo_setup(AVFormatContext *s)
                 avformat_free_context(rtpctx);
             } else if (rt->transport == RTSP_TRANSPORT_RDT && CONFIG_RTPDEC)
                 ff_rdt_parse_close(rtsp_st->transport_priv);
-            else if (rt->transport == RTSP_TRANSPORT_RAW && CONFIG_RTPDEC)
+            else if (rt->transport == RTSP_TRANSPORT_RTP && CONFIG_RTPDEC)
                 ff_rtp_parse_close(rtsp_st->transport_priv);
         }
         rtsp_st->transport_priv = NULL;
@@ -1695,6 +1693,7 @@ static int udp_read_packet(AVFormatContext *s, RTSPStream **prtsp_st,
     int n, i, ret, tcp_fd, timeout_cnt = 0;
     int max_p = 0;
     struct pollfd *p = rt->p;
+    int *fds = NULL, fdsnum, fdsidx;
 
     for (;;) {
         if (ff_check_interrupt(&s->interrupt_callback))
@@ -1712,10 +1711,21 @@ static int udp_read_packet(AVFormatContext *s, RTSPStream **prtsp_st,
         for (i = 0; i < rt->nb_rtsp_streams; i++) {
             rtsp_st = rt->rtsp_streams[i];
             if (rtsp_st->rtp_handle) {
-                p[max_p].fd = ffurl_get_file_handle(rtsp_st->rtp_handle);
-                p[max_p++].events = POLLIN;
-                p[max_p].fd = ff_rtp_get_rtcp_file_handle(rtsp_st->rtp_handle);
-                p[max_p++].events = POLLIN;
+                if (ret = ffurl_get_multi_file_handle(rtsp_st->rtp_handle,
+                                                      &fds, &fdsnum)) {
+                    av_log(s, AV_LOG_ERROR, "Unable to recover rtp ports\n");
+                    return ret;
+                }
+                if (fdsnum != 2) {
+                    av_log(s, AV_LOG_ERROR,
+                           "Number of fds %d not supported\n", fdsnum);
+                    return AVERROR_INVALIDDATA;
+                }
+                for (fdsidx = 0; fdsidx < fdsnum; fdsidx++) {
+                    p[max_p].fd       = fds[fdsidx];
+                    p[max_p++].events = POLLIN;
+                }
+                av_free(fds);
             }
         }
         n = poll(p, max_p, POLL_TIMEOUT_MS);

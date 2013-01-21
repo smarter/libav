@@ -326,7 +326,7 @@ static int swScale(SwsContext *c, const uint8_t *src[],
     const int chrSrcW                = c->chrSrcW;
     const int lumXInc                = c->lumXInc;
     const int chrXInc                = c->chrXInc;
-    const enum PixelFormat dstFormat = c->dstFormat;
+    const enum AVPixelFormat dstFormat = c->dstFormat;
     const int flags                  = c->flags;
     int32_t *vLumFilterPos           = c->vLumFilterPos;
     int32_t *vChrFilterPos           = c->vChrFilterPos;
@@ -518,7 +518,7 @@ static int swScale(SwsContext *c, const uint8_t *src[],
         if (!enough_lines)
             break;  // we can't output a dstY line so let's try with the next slice
 
-#if HAVE_MMX && HAVE_INLINE_ASM
+#if HAVE_MMX_INLINE
         updateMMXDitherTables(c, dstY, lumBufIndex, chrBufIndex,
                               lastInLumBuf, lastInChrBuf);
 #endif
@@ -628,8 +628,6 @@ static int swScale(SwsContext *c, const uint8_t *src[],
                     }
                 }
             } else {
-                assert(lumSrcPtr  + vLumFilterSize - 1 < lumPixBuf  + vLumBufSize * 2);
-                assert(chrUSrcPtr + vChrFilterSize - 1 < chrUPixBuf + vChrBufSize * 2);
                 if (c->yuv2packed1 && vLumFilterSize == 1 &&
                     vChrFilterSize <= 2) { // unscaled RGB
                     int chrAlpha = vChrFilterSize == 1 ? 0 : vChrFilter[2 * dstY + 1];
@@ -661,7 +659,7 @@ static int swScale(SwsContext *c, const uint8_t *src[],
     if (isPlanar(dstFormat) && isALPHA(dstFormat) && !alpPixBuf)
         fillPlane(dst[3], dstStride[3], dstW, dstY - lastDstY, lastDstY, 255);
 
-#if HAVE_MMXEXT && HAVE_INLINE_ASM
+#if HAVE_MMXEXT_INLINE
     if (av_get_cpu_flags() & AV_CPU_FLAG_MMXEXT)
         __asm__ volatile ("sfence" ::: "memory");
 #endif
@@ -679,7 +677,7 @@ static int swScale(SwsContext *c, const uint8_t *src[],
 
 static av_cold void sws_init_swScale_c(SwsContext *c)
 {
-    enum PixelFormat srcFormat = c->srcFormat;
+    enum AVPixelFormat srcFormat = c->srcFormat;
 
     ff_sws_init_output_funcs(c, &c->yuv2plane1, &c->yuv2planeX,
                              &c->yuv2nv12cX, &c->yuv2packed1,
@@ -723,7 +721,7 @@ static av_cold void sws_init_swScale_c(SwsContext *c)
     }
 
     if (!(isGray(srcFormat) || isGray(c->dstFormat) ||
-          srcFormat == PIX_FMT_MONOBLACK || srcFormat == PIX_FMT_MONOWHITE))
+          srcFormat == AV_PIX_FMT_MONOBLACK || srcFormat == AV_PIX_FMT_MONOWHITE))
         c->needs_hcscale = 1;
 }
 

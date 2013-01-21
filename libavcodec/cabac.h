@@ -39,6 +39,10 @@
 #define CABAC_BITS 16
 #define CABAC_MASK ((1<<CABAC_BITS)-1)
 
+extern const uint8_t ff_lps_range[64][4];
+extern const uint8_t ff_mps_state[64];
+extern const uint8_t ff_lps_state[64];
+
 typedef struct CABACContext{
     int low;
     int range;

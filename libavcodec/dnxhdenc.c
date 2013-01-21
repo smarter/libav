@@ -37,7 +37,7 @@
 #define DNX10BIT_QMAT_SHIFT 18 // The largest value that will not lead to overflow for 10bit samples.
 
 static const AVOption options[]={
-    {"nitris_compat", "encode with Avid Nitris compatibility", offsetof(DNXHDEncContext, nitris_compat), AV_OPT_TYPE_INT, {.dbl = 0}, 0, 1, VE},
+    {"nitris_compat", "encode with Avid Nitris compatibility", offsetof(DNXHDEncContext, nitris_compat), AV_OPT_TYPE_INT, {.i64 = 0}, 0, 1, VE},
 {NULL}
 };
 static const AVClass class = { "dnxhd", av_default_item_name, options, LIBAVUTIL_VERSION_INT };
@@ -233,10 +233,10 @@ static int dnxhd_encode_init(AVCodecContext *avctx)
     int i, index, bit_depth;
 
     switch (avctx->pix_fmt) {
-    case PIX_FMT_YUV422P:
+    case AV_PIX_FMT_YUV422P:
         bit_depth = 8;
         break;
-    case PIX_FMT_YUV422P10:
+    case AV_PIX_FMT_YUV422P10:
         bit_depth = 10;
         break;
     default:
@@ -274,9 +274,8 @@ static int dnxhd_encode_init(AVCodecContext *avctx)
        ctx->block_width_l2 = 3;
     }
 
-#if HAVE_MMX
-    ff_dnxhd_init_mmx(ctx);
-#endif
+    if (ARCH_X86)
+        ff_dnxhdenc_init_x86(ctx);
 
     ctx->m.mb_height = (avctx->height + 15) / 16;
     ctx->m.mb_width  = (avctx->width  + 15) / 16;
@@ -1006,9 +1005,9 @@ AVCodec ff_dnxhd_encoder = {
     .encode2        = dnxhd_encode_picture,
     .close          = dnxhd_encode_end,
     .capabilities   = CODEC_CAP_SLICE_THREADS,
-    .pix_fmts       = (const enum PixelFormat[]){ PIX_FMT_YUV422P,
-                                                  PIX_FMT_YUV422P10,
-                                                  PIX_FMT_NONE },
+    .pix_fmts       = (const enum AVPixelFormat[]){ AV_PIX_FMT_YUV422P,
+                                                  AV_PIX_FMT_YUV422P10,
+                                                  AV_PIX_FMT_NONE },
     .long_name      = NULL_IF_CONFIG_SMALL("VC3/DNxHD"),
     .priv_class     = &class,
 };

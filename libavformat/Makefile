@@ -12,6 +12,7 @@ OBJS = allformats.o         \
        id3v1.o              \
        id3v2.o              \
        metadata.o           \
+       mux.o                \
        options.o            \
        os_support.o         \
        riff.o               \
@@ -108,6 +109,7 @@ OBJS-$(CONFIG_H263_DEMUXER)              += h263dec.o rawdec.o
 OBJS-$(CONFIG_H263_MUXER)                += rawenc.o
 OBJS-$(CONFIG_H264_DEMUXER)              += h264dec.o rawdec.o
 OBJS-$(CONFIG_H264_MUXER)                += rawenc.o
+OBJS-$(CONFIG_HEVC_DEMUXER)              += hevcdec.o rawdec.o
 OBJS-$(CONFIG_HLS_DEMUXER)               += hls.o
 OBJS-$(CONFIG_IDCIN_DEMUXER)             += idcin.o
 OBJS-$(CONFIG_IFF_DEMUXER)               += iff.o
@@ -253,6 +255,7 @@ OBJS-$(CONFIG_RTP_MUXER)                 += rtp.o         \
                                             rtpenc_amr.o     \
                                             rtpenc_h263.o    \
                                             rtpenc_h263_rfc2190.o \
+                                            rtpenc_jpeg.o \
                                             rtpenc_mpv.o     \
                                             rtpenc.o      \
                                             rtpenc_h264.o \
@@ -269,6 +272,7 @@ OBJS-$(CONFIG_RTPDEC)                    += rdt.o         \
                                             rtpdec_h263_rfc2190.o \
                                             rtpdec_h264.o \
                                             rtpdec_ilbc.o \
+                                            rtpdec_jpeg.o \
                                             rtpdec_latm.o \
                                             rtpdec_mpeg4.o \
                                             rtpdec_qcelp.o \
@@ -291,6 +295,7 @@ OBJS-$(CONFIG_SIFF_DEMUXER)              += siff.o
 OBJS-$(CONFIG_SMACKER_DEMUXER)           += smacker.o
 OBJS-$(CONFIG_SMJPEG_DEMUXER)            += smjpegdec.o smjpeg.o
 OBJS-$(CONFIG_SMJPEG_MUXER)              += smjpegenc.o smjpeg.o
+OBJS-$(CONFIG_SMOOTHSTREAMING_MUXER)     += smoothstreamingenc.o isom.o
 OBJS-$(CONFIG_SOL_DEMUXER)               += sol.o pcm.o
 OBJS-$(CONFIG_SOX_DEMUXER)               += soxdec.o pcm.o
 OBJS-$(CONFIG_SOX_MUXER)                 += soxenc.o
@@ -372,11 +377,12 @@ SKIPHEADERS-$(CONFIG_NETWORK)            += network.h rtsp.h
 EXAMPLES  = metadata                                                    \
             output                                                      \
 
-TESTPROGS = seek
+TESTPROGS = seek                                                        \
+            url                                                         \
 
 TOOLS     = aviocat                                                     \
             ismindex                                                    \
             pktdumper                                                   \
             probetest                                                   \
 
-$(SUBDIR)output-example$(EXESUF): ELIBS = -lswscale
+$(SUBDIR)output-example$(EXESUF): ELIBS = $(patsubst %,$(LD_LIB),swscale)

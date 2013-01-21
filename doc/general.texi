@@ -262,6 +262,7 @@ library:
 @item raw H.261                 @tab X @tab X
 @item raw H.263                 @tab X @tab X
 @item raw H.264                 @tab X @tab X
+@item raw HEVC                  @tab   @tab X
 @item raw Ingenient MJPEG       @tab   @tab X
 @item raw MJPEG                 @tab X @tab X
 @item raw MLP                   @tab   @tab X
@@ -510,6 +511,7 @@ following image formats are supported:
 @item H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10  @tab  E  @tab  X
     @tab encoding supported through external library libx264
 @item H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10 (VDPAU acceleration)  @tab  E  @tab  X
+@item HEVC / MPEG-H part 2   @tab     @tab  X
 @item HuffYUV                @tab  X  @tab  X
 @item HuffYUV FFmpeg variant @tab  X  @tab  X
 @item IBM Ultimotion         @tab     @tab  X
@@ -547,6 +549,8 @@ following image formats are supported:
 @item Microsoft RLE          @tab     @tab  X
 @item Microsoft Screen 1     @tab     @tab  X
     @tab Also known as Windows Media Video V7 Screen.
+@item Microsoft Screen 2     @tab     @tab  X
+    @tab Also known as Windows Media Video V9 Screen.
 @item Microsoft Video 1      @tab     @tab  X
 @item Mimic                  @tab     @tab  X
     @tab Used in MSN Messenger Webcam streams.
@@ -620,7 +624,7 @@ following image formats are supported:
     @tab encoding supported through external library libtheora
 @item Tiertex Limited SEQ video  @tab     @tab  X
     @tab Codec used in DOS CD-ROM FlashBack game.
-@item Ut Video               @tab     @tab  X
+@item Ut Video               @tab  X  @tab  X
 @item v210 QuickTime uncompressed 4:2:2 10-bit     @tab  X  @tab  X
 @item v410 QuickTime uncompressed 4:4:4 10-bit     @tab  X  @tab  X
 @item VBLE Lossless Codec    @tab     @tab  X
@@ -754,6 +758,8 @@ following image formats are supported:
 @item Musepack SV7           @tab     @tab  X
 @item Musepack SV8           @tab     @tab  X
 @item Nellymoser Asao        @tab  X  @tab  X
+@item Opus                   @tab  E  @tab  E
+    @tab supported through external library libopus
 @item PCM A-law              @tab  X  @tab  X
 @item PCM mu-law             @tab  X  @tab  X
 @item PCM 16-bit little-endian planar  @tab     @tab  X

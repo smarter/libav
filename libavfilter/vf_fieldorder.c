@@ -71,14 +71,14 @@ static av_cold int init(AVFilterContext *ctx, const char *args)
 static int query_formats(AVFilterContext *ctx)
 {
     AVFilterFormats  *formats;
-    enum PixelFormat pix_fmt;
+    enum AVPixelFormat pix_fmt;
     int              ret;
 
     /** accept any input pixel format that is not hardware accelerated, not
      *  a bitstream format, and does not have vertically sub-sampled chroma */
     if (ctx->inputs[0]) {
         formats = NULL;
-        for (pix_fmt = 0; pix_fmt < PIX_FMT_NB; pix_fmt++)
+        for (pix_fmt = 0; pix_fmt < AV_PIX_FMT_NB; pix_fmt++)
             if (!(  av_pix_fmt_descriptors[pix_fmt].flags & PIX_FMT_HWACCEL
                  || av_pix_fmt_descriptors[pix_fmt].flags & PIX_FMT_BITSTREAM)
                 && av_pix_fmt_descriptors[pix_fmt].nb_components
@@ -234,23 +234,35 @@ static int end_frame(AVFilterLink *inlink)
     return ff_end_frame(outlink);
 }
 
+static const AVFilterPad avfilter_vf_fieldorder_inputs[] = {
+    {
+        .name             = "default",
+        .type             = AVMEDIA_TYPE_VIDEO,
+        .config_props     = config_input,
+        .start_frame      = start_frame,
+        .get_video_buffer = get_video_buffer,
+        .draw_slice       = draw_slice,
+        .end_frame        = end_frame,
+        .min_perms        = AV_PERM_READ,
+        .rej_perms        = AV_PERM_REUSE2 | AV_PERM_PRESERVE,
+    },
+    { NULL }
+};
+
+static const AVFilterPad avfilter_vf_fieldorder_outputs[] = {
+    {
+        .name = "default",
+        .type = AVMEDIA_TYPE_VIDEO,
+    },
+    { NULL }
+};
+
 AVFilter avfilter_vf_fieldorder = {
     .name          = "fieldorder",
     .description   = NULL_IF_CONFIG_SMALL("Set the field order."),
     .init          = init,
     .priv_size     = sizeof(FieldOrderContext),
     .query_formats = query_formats,
-    .inputs        = (const AVFilterPad[]) {{ .name             = "default",
-                                              .type             = AVMEDIA_TYPE_VIDEO,
-                                              .config_props     = config_input,
-                                              .start_frame      = start_frame,
-                                              .get_video_buffer = get_video_buffer,
-                                              .draw_slice       = draw_slice,
-                                              .end_frame        = end_frame,
-                                              .min_perms        = AV_PERM_READ,
-                                              .rej_perms        = AV_PERM_REUSE2|AV_PERM_PRESERVE,},
-                                            { .name = NULL}},
-    .outputs       = (const AVFilterPad[]) {{ .name             = "default",
-                                              .type             = AVMEDIA_TYPE_VIDEO, },
-                                            { .name = NULL}},
+    .inputs        = avfilter_vf_fieldorder_inputs,
+    .outputs       = avfilter_vf_fieldorder_outputs,
 };

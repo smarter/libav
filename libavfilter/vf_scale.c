@@ -123,12 +123,12 @@ static av_cold void uninit(AVFilterContext *ctx)
 static int query_formats(AVFilterContext *ctx)
 {
     AVFilterFormats *formats;
-    enum PixelFormat pix_fmt;
+    enum AVPixelFormat pix_fmt;
     int ret;
 
     if (ctx->inputs[0]) {
         formats = NULL;
-        for (pix_fmt = 0; pix_fmt < PIX_FMT_NB; pix_fmt++)
+        for (pix_fmt = 0; pix_fmt < AV_PIX_FMT_NB; pix_fmt++)
             if (   sws_isSupportedInput(pix_fmt)
                 && (ret = ff_add_format(&formats, pix_fmt)) < 0) {
                 ff_formats_unref(&formats);
@@ -138,7 +138,7 @@ static int query_formats(AVFilterContext *ctx)
     }
     if (ctx->outputs[0]) {
         formats = NULL;
-        for (pix_fmt = 0; pix_fmt < PIX_FMT_NB; pix_fmt++)
+        for (pix_fmt = 0; pix_fmt < AV_PIX_FMT_NB; pix_fmt++)
             if (    sws_isSupportedOutput(pix_fmt)
                 && (ret = ff_add_format(&formats, pix_fmt)) < 0) {
                 ff_formats_unref(&formats);
@@ -167,9 +167,9 @@ static int config_props(AVFilterLink *outlink)
     var_values[VAR_IN_H]  = var_values[VAR_IH] = inlink->h;
     var_values[VAR_OUT_W] = var_values[VAR_OW] = NAN;
     var_values[VAR_OUT_H] = var_values[VAR_OH] = NAN;
-    var_values[VAR_DAR]   = var_values[VAR_A]  = (float) inlink->w / inlink->h;
+    var_values[VAR_DAR]   = var_values[VAR_A]  = (double) inlink->w / inlink->h;
     var_values[VAR_SAR]   = inlink->sample_aspect_ratio.num ?
-        (float) inlink->sample_aspect_ratio.num / inlink->sample_aspect_ratio.den : 1;
+        (double) inlink->sample_aspect_ratio.num / inlink->sample_aspect_ratio.den : 1;
     var_values[VAR_HSUB]  = 1<<av_pix_fmt_descriptors[inlink->format].log2_chroma_w;
     var_values[VAR_VSUB]  = 1<<av_pix_fmt_descriptors[inlink->format].log2_chroma_h;
 
@@ -336,6 +336,26 @@ static int draw_slice(AVFilterLink *link, int y, int h, int slice_dir)
     return ret;
 }
 
+static const AVFilterPad avfilter_vf_scale_inputs[] = {
+    {
+        .name        = "default",
+        .type        = AVMEDIA_TYPE_VIDEO,
+        .start_frame = start_frame,
+        .draw_slice  = draw_slice,
+        .min_perms   = AV_PERM_READ,
+    },
+    { NULL }
+};
+
+static const AVFilterPad avfilter_vf_scale_outputs[] = {
+    {
+        .name         = "default",
+        .type         = AVMEDIA_TYPE_VIDEO,
+        .config_props = config_props,
+    },
+    { NULL }
+};
+
 AVFilter avfilter_vf_scale = {
     .name      = "scale",
     .description = NULL_IF_CONFIG_SMALL("Scale the input video to width:height size and/or convert the image format."),
@@ -347,14 +367,6 @@ AVFilter avfilter_vf_scale = {
 
     .priv_size = sizeof(ScaleContext),
 
-    .inputs    = (const AVFilterPad[]) {{ .name             = "default",
-                                          .type             = AVMEDIA_TYPE_VIDEO,
-                                          .start_frame      = start_frame,
-                                          .draw_slice       = draw_slice,
-                                          .min_perms        = AV_PERM_READ, },
-                                        { .name = NULL}},
-    .outputs   = (const AVFilterPad[]) {{ .name             = "default",
-                                          .type             = AVMEDIA_TYPE_VIDEO,
-                                          .config_props     = config_props, },
-                                        { .name = NULL}},
+    .inputs    = avfilter_vf_scale_inputs,
+    .outputs   = avfilter_vf_scale_outputs,
 };

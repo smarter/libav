@@ -97,7 +97,7 @@ double parse_number_or_die(const char *context, const char *numstr, int type,
     else
         return d;
     av_log(NULL, AV_LOG_FATAL, error, context, numstr, min, max);
-    exit_program(1);
+    exit(1);
     return 0;
 }
 
@@ -108,13 +108,13 @@ int64_t parse_time_or_die(const char *context, const char *timestr,
     if (av_parse_time(&us, timestr, is_duration) < 0) {
         av_log(NULL, AV_LOG_FATAL, "Invalid %s specification for %s: %s\n",
                is_duration ? "duration" : "date", context, timestr);
-        exit_program(1);
+        exit(1);
     }
     return us;
 }
 
-void show_help_options(const OptionDef *options, const char *msg, int mask,
-                       int value)
+void show_help_options(const OptionDef *options, const char *msg, int req_flags,
+                       int rej_flags, int alt_flags)
 {
     const OptionDef *po;
     int first;
@@ -122,19 +122,24 @@ void show_help_options(const OptionDef *options, const char *msg, int mask,
     first = 1;
     for (po = options; po->name != NULL; po++) {
         char buf[64];
-        if ((po->flags & mask) == value) {
-            if (first) {
-                printf("%s", msg);
-                first = 0;
-            }
-            av_strlcpy(buf, po->name, sizeof(buf));
-            if (po->flags & HAS_ARG) {
-                av_strlcat(buf, " ", sizeof(buf));
-                av_strlcat(buf, po->argname, sizeof(buf));
-            }
-            printf("-%-17s  %s\n", buf, po->help);
+
+        if (((po->flags & req_flags) != req_flags) ||
+            (alt_flags && !(po->flags & alt_flags)) ||
+            (po->flags & rej_flags))
+            continue;
+
+        if (first) {
+            printf("%s\n", msg);
+            first = 0;
         }
+        av_strlcpy(buf, po->name, sizeof(buf));
+        if (po->argname) {
+            av_strlcat(buf, " ", sizeof(buf));
+            av_strlcat(buf, po->argname, sizeof(buf));
+        }
+        printf("-%-17s  %s\n", buf, po->help);
     }
+    printf("\n");
 }
 
 void show_help_children(const AVClass *class, int flags)
@@ -266,6 +271,7 @@ int parse_option(void *optctx, const char *opt, const char *arg,
     if (po->flags & OPT_STRING) {
         char *str;
         str = av_strdup(arg);
+        av_freep(dst);
         *(char **)dst = str;
     } else if (po->flags & OPT_BOOL) {
         *(int *)dst = bool_val;
@@ -280,8 +286,7 @@ int parse_option(void *optctx, const char *opt, const char *arg,
     } else if (po->flags & OPT_DOUBLE) {
         *(double *)dst = parse_number_or_die(opt, arg, OPT_DOUBLE, -INFINITY, INFINITY);
     } else if (po->u.func_arg) {
-        int ret = po->flags & OPT_FUNC2 ? po->u.func2_arg(optctx, opt, arg)
-                                        : po->u.func_arg(opt, arg);
+        int ret = po->u.func_arg(optctx, opt, arg);
         if (ret < 0) {
             av_log(NULL, AV_LOG_ERROR,
                    "Failed to set value '%s' for option '%s'\n", arg, opt);
@@ -289,7 +294,7 @@ int parse_option(void *optctx, const char *opt, const char *arg,
         }
     }
     if (po->flags & OPT_EXIT)
-        exit_program(0);
+        exit(0);
     return !!(po->flags & HAS_ARG);
 }
 
@@ -315,7 +320,7 @@ void parse_options(void *optctx, int argc, char **argv, const OptionDef *options
             opt++;
 
             if ((ret = parse_option(optctx, opt, argv[optindex], options)) < 0)
-                exit_program(1);
+                exit(1);
             optindex += ret;
         } else {
             if (parse_arg_function)
@@ -356,11 +361,11 @@ void parse_loglevel(int argc, char **argv, const OptionDef *options)
     if (!idx)
         idx = locate_option(argc, argv, options, "v");
     if (idx && argv[idx + 1])
-        opt_loglevel("loglevel", argv[idx + 1]);
+        opt_loglevel(NULL, "loglevel", argv[idx + 1]);
 }
 
 #define FLAGS (o->type == AV_OPT_TYPE_FLAGS) ? AV_DICT_APPEND : 0
-int opt_default(const char *opt, const char *arg)
+int opt_default(void *optctx, const char *opt, const char *arg)
 {
     const AVOption *o;
     char opt_stripped[128];
@@ -395,7 +400,7 @@ int opt_default(const char *opt, const char *arg)
     return AVERROR_OPTION_NOT_FOUND;
 }
 
-int opt_loglevel(const char *opt, const char *arg)
+int opt_loglevel(void *optctx, const char *opt, const char *arg)
 {
     const struct { const char *name; int level; } log_levels[] = {
         { "quiet"  , AV_LOG_QUIET   },
@@ -424,13 +429,13 @@ int opt_loglevel(const char *opt, const char *arg)
                "Possible levels are numbers or:\n", arg);
         for (i = 0; i < FF_ARRAY_ELEMS(log_levels); i++)
             av_log(NULL, AV_LOG_FATAL, "\"%s\"\n", log_levels[i].name);
-        exit_program(1);
+        exit(1);
     }
     av_log_set_level(level);
     return 0;
 }
 
-int opt_timelimit(const char *opt, const char *arg)
+int opt_timelimit(void *optctx, const char *opt, const char *arg)
 {
 #if HAVE_SETRLIMIT
     int lim = parse_number_or_die(opt, arg, OPT_INT64, 0, INT_MAX);
@@ -510,13 +515,16 @@ void show_banner(void)
     print_all_libs_info(INDENT|SHOW_VERSION, AV_LOG_VERBOSE);
 }
 
-void show_version(void) {
+int show_version(void *optctx, const char *opt, const char *arg)
+{
     av_log_set_callback(log_callback_help);
     printf("%s " LIBAV_VERSION "\n", program_name);
     print_all_libs_info(SHOW_VERSION, AV_LOG_INFO);
+
+    return 0;
 }
 
-void show_license(void)
+int show_license(void *optctx, const char *opt, const char *arg)
 {
     printf(
 #if CONFIG_NONFREE
@@ -583,9 +591,11 @@ void show_license(void)
     program_name, program_name, program_name
 #endif
     );
+
+    return 0;
 }
 
-void show_formats(void)
+int show_formats(void *optctx, const char *opt, const char *arg)
 {
     AVInputFormat *ifmt  = NULL;
     AVOutputFormat *ofmt = NULL;
@@ -630,86 +640,193 @@ void show_formats(void)
                name,
             long_name ? long_name:" ");
     }
+    return 0;
 }
 
-void show_codecs(void)
+#define PRINT_CODEC_SUPPORTED(codec, field, type, list_name, term, get_name) \
+    if (codec->field) {                                                      \
+        const type *p = c->field;                                            \
+                                                                             \
+        printf("    Supported " list_name ":");                              \
+        while (*p != term) {                                                 \
+            get_name(*p);                                                    \
+            printf(" %s", name);                                             \
+            p++;                                                             \
+        }                                                                    \
+        printf("\n");                                                        \
+    }                                                                        \
+
+static void print_codec(const AVCodec *c)
 {
-    AVCodec *p = NULL, *p2;
-    const char *last_name;
+    int encoder = av_codec_is_encoder(c);
+
+    printf("%s %s [%s]:\n", encoder ? "Encoder" : "Decoder", c->name,
+           c->long_name ? c->long_name : "");
+
+    if (c->type == AVMEDIA_TYPE_VIDEO) {
+        printf("    Threading capabilities: ");
+        switch (c->capabilities & (CODEC_CAP_FRAME_THREADS |
+                                   CODEC_CAP_SLICE_THREADS)) {
+        case CODEC_CAP_FRAME_THREADS |
+             CODEC_CAP_SLICE_THREADS: printf("frame and slice"); break;
+        case CODEC_CAP_FRAME_THREADS: printf("frame");           break;
+        case CODEC_CAP_SLICE_THREADS: printf("slice");           break;
+        default:                      printf("no");              break;
+        }
+        printf("\n");
+    }
+
+    if (c->supported_framerates) {
+        const AVRational *fps = c->supported_framerates;
+
+        printf("    Supported framerates:");
+        while (fps->num) {
+            printf(" %d/%d", fps->num, fps->den);
+            fps++;
+        }
+        printf("\n");
+    }
+    PRINT_CODEC_SUPPORTED(c, pix_fmts, enum AVPixelFormat, "pixel formats",
+                          AV_PIX_FMT_NONE, GET_PIX_FMT_NAME);
+    PRINT_CODEC_SUPPORTED(c, supported_samplerates, int, "sample rates", 0,
+                          GET_SAMPLE_RATE_NAME);
+    PRINT_CODEC_SUPPORTED(c, sample_fmts, enum AVSampleFormat, "sample formats",
+                          AV_SAMPLE_FMT_NONE, GET_SAMPLE_FMT_NAME);
+    PRINT_CODEC_SUPPORTED(c, channel_layouts, uint64_t, "channel layouts",
+                          0, GET_CH_LAYOUT_DESC);
+
+    if (c->priv_class) {
+        show_help_children(c->priv_class,
+                           AV_OPT_FLAG_ENCODING_PARAM |
+                           AV_OPT_FLAG_DECODING_PARAM);
+    }
+}
+
+static char get_media_type_char(enum AVMediaType type)
+{
+    switch (type) {
+        case AVMEDIA_TYPE_VIDEO:    return 'V';
+        case AVMEDIA_TYPE_AUDIO:    return 'A';
+        case AVMEDIA_TYPE_SUBTITLE: return 'S';
+        default:                    return '?';
+    }
+}
+
+static const AVCodec *next_codec_for_id(enum AVCodecID id, const AVCodec *prev,
+                                        int encoder)
+{
+    while ((prev = av_codec_next(prev))) {
+        if (prev->id == id &&
+            (encoder ? av_codec_is_encoder(prev) : av_codec_is_decoder(prev)))
+            return prev;
+    }
+    return NULL;
+}
+
+static void print_codecs_for_id(enum AVCodecID id, int encoder)
+{
+    const AVCodec *codec = NULL;
+
+    printf(" (%s: ", encoder ? "encoders" : "decoders");
+
+    while ((codec = next_codec_for_id(id, codec, encoder)))
+        printf("%s ", codec->name);
+
+    printf(")");
+}
+
+int show_codecs(void *optctx, const char *opt, const char *arg)
+{
+    const AVCodecDescriptor *desc = NULL;
+
     printf("Codecs:\n"
            " D..... = Decoding supported\n"
            " .E.... = Encoding supported\n"
            " ..V... = Video codec\n"
            " ..A... = Audio codec\n"
            " ..S... = Subtitle codec\n"
-           " ...S.. = Supports draw_horiz_band\n"
-           " ....D. = Supports direct rendering method 1\n"
-           " .....T = Supports weird frame truncation\n"
-           " ------\n");
-    last_name= "000";
-    for (;;) {
-        int decode = 0;
-        int encode = 0;
-        int cap    = 0;
-        const char *type_str;
+           " ...I.. = Intra frame-only codec\n"
+           " ....L. = Lossy compression\n"
+           " .....S = Lossless compression\n"
+           " -------\n");
+    while ((desc = avcodec_descriptor_next(desc))) {
+        const AVCodec *codec = NULL;
 
-        p2 = NULL;
-        while ((p = av_codec_next(p))) {
-            if ((p2 == NULL || strcmp(p->name, p2->name) < 0) &&
-                strcmp(p->name, last_name) > 0) {
-                p2 = p;
-                decode = encode = cap = 0;
-            }
-            if (p2 && strcmp(p->name, p2->name) == 0) {
-                if (av_codec_is_decoder(p))
-                    decode = 1;
-                if (av_codec_is_encoder(p))
-                    encode = 1;
-                cap |= p->capabilities;
+        printf(avcodec_find_decoder(desc->id) ? "D" : ".");
+        printf(avcodec_find_encoder(desc->id) ? "E" : ".");
+
+        printf("%c", get_media_type_char(desc->type));
+        printf((desc->props & AV_CODEC_PROP_INTRA_ONLY) ? "I" : ".");
+        printf((desc->props & AV_CODEC_PROP_LOSSY)      ? "L" : ".");
+        printf((desc->props & AV_CODEC_PROP_LOSSLESS)   ? "S" : ".");
+
+        printf(" %-20s %s", desc->name, desc->long_name ? desc->long_name : "");
+
+        /* print decoders/encoders when there's more than one or their
+         * names are different from codec name */
+        while ((codec = next_codec_for_id(desc->id, codec, 0))) {
+            if (strcmp(codec->name, desc->name)) {
+                print_codecs_for_id(desc->id, 0);
+                break;
             }
         }
-        if (p2 == NULL)
-            break;
-        last_name = p2->name;
-
-        switch (p2->type) {
-        case AVMEDIA_TYPE_VIDEO:
-            type_str = "V";
-            break;
-        case AVMEDIA_TYPE_AUDIO:
-            type_str = "A";
-            break;
-        case AVMEDIA_TYPE_SUBTITLE:
-            type_str = "S";
-            break;
-        default:
-            type_str = "?";
-            break;
+        codec = NULL;
+        while ((codec = next_codec_for_id(desc->id, codec, 1))) {
+            if (strcmp(codec->name, desc->name)) {
+                print_codecs_for_id(desc->id, 1);
+                break;
+            }
         }
-        printf(" %s%s%s%s%s%s %-15s %s",
-               decode ? "D" : (/* p2->decoder ? "d" : */ " "),
-               encode ? "E" : " ",
-               type_str,
-               cap & CODEC_CAP_DRAW_HORIZ_BAND ? "S" : " ",
-               cap & CODEC_CAP_DR1 ? "D" : " ",
-               cap & CODEC_CAP_TRUNCATED ? "T" : " ",
-               p2->name,
-               p2->long_name ? p2->long_name : "");
-#if 0
-            if (p2->decoder && decode == 0)
-                printf(" use %s for decoding", p2->decoder->name);
-#endif
+
         printf("\n");
     }
-    printf("\n");
-    printf("Note, the names of encoders and decoders do not always match, so there are\n"
-           "several cases where the above table shows encoder only or decoder only entries\n"
-           "even though both encoding and decoding are supported. For example, the h263\n"
-           "decoder corresponds to the h263 and h263p encoders, for file formats it is even\n"
-           "worse.\n");
+    return 0;
 }
 
-void show_bsfs(void)
+static void print_codecs(int encoder)
+{
+    const AVCodecDescriptor *desc = NULL;
+
+    printf("%s:\n"
+           " V... = Video\n"
+           " A... = Audio\n"
+           " S... = Subtitle\n"
+           " .F.. = Frame-level multithreading\n"
+           " ..S. = Slice-level multithreading\n"
+           " ...X = Codec is experimental\n"
+           " ---\n",
+           encoder ? "Encoders" : "Decoders");
+    while ((desc = avcodec_descriptor_next(desc))) {
+        const AVCodec *codec = NULL;
+
+        while ((codec = next_codec_for_id(desc->id, codec, encoder))) {
+            printf("%c", get_media_type_char(desc->type));
+            printf((codec->capabilities & CODEC_CAP_FRAME_THREADS) ? "F" : ".");
+            printf((codec->capabilities & CODEC_CAP_SLICE_THREADS) ? "S" : ".");
+            printf((codec->capabilities & CODEC_CAP_EXPERIMENTAL)  ? "X" : ".");
+
+            printf(" %-20s %s", codec->name, codec->long_name ? codec->long_name : "");
+            if (strcmp(codec->name, desc->name))
+                printf(" (codec %s)", desc->name);
+
+            printf("\n");
+        }
+    }
+}
+
+int show_decoders(void *optctx, const char *opt, const char *arg)
+{
+    print_codecs(0);
+    return 0;
+}
+
+int show_encoders(void *optctx, const char *opt, const char *arg)
+{
+    print_codecs(1);
+    return 0;
+}
+
+int show_bsfs(void *optctx, const char *opt, const char *arg)
 {
     AVBitStreamFilter *bsf = NULL;
 
@@ -717,9 +834,10 @@ void show_bsfs(void)
     while ((bsf = av_bitstream_filter_next(bsf)))
         printf("%s\n", bsf->name);
     printf("\n");
+    return 0;
 }
 
-void show_protocols(void)
+int show_protocols(void *optctx, const char *opt, const char *arg)
 {
     void *opaque = NULL;
     const char *name;
@@ -731,9 +849,10 @@ void show_protocols(void)
     printf("Output:\n");
     while ((name = avio_enum_protocols(&opaque, 1)))
         printf("%s\n", name);
+    return 0;
 }
 
-void show_filters(void)
+int show_filters(void *optctx, const char *opt, const char *arg)
 {
     AVFilter av_unused(**filter) = NULL;
 
@@ -742,11 +861,12 @@ void show_filters(void)
     while ((filter = av_filter_next(filter)) && *filter)
         printf("%-16s %s\n", (*filter)->name, (*filter)->description);
 #endif
+    return 0;
 }
 
-void show_pix_fmts(void)
+int show_pix_fmts(void *optctx, const char *opt, const char *arg)
 {
-    enum PixelFormat pix_fmt;
+    enum AVPixelFormat pix_fmt;
 
     printf("Pixel formats:\n"
            "I.... = Supported Input  format for conversion\n"
@@ -762,7 +882,7 @@ void show_pix_fmts(void)
 #   define sws_isSupportedOutput(x) 0
 #endif
 
-    for (pix_fmt = 0; pix_fmt < PIX_FMT_NB; pix_fmt++) {
+    for (pix_fmt = 0; pix_fmt < AV_PIX_FMT_NB; pix_fmt++) {
         const AVPixFmtDescriptor *pix_desc = &av_pix_fmt_descriptors[pix_fmt];
         printf("%c%c%c%c%c %-16s       %d            %2d\n",
                sws_isSupportedInput (pix_fmt)      ? 'I' : '.',
@@ -774,14 +894,129 @@ void show_pix_fmts(void)
                pix_desc->nb_components,
                av_get_bits_per_pixel(pix_desc));
     }
+    return 0;
 }
 
-int show_sample_fmts(const char *opt, const char *arg)
+int show_sample_fmts(void *optctx, const char *opt, const char *arg)
 {
     int i;
     char fmt_str[128];
     for (i = -1; i < AV_SAMPLE_FMT_NB; i++)
         printf("%s\n", av_get_sample_fmt_string(fmt_str, sizeof(fmt_str), i));
+    return 0;
+}
+
+static void show_help_codec(const char *name, int encoder)
+{
+    const AVCodecDescriptor *desc;
+    const AVCodec *codec;
+
+    if (!name) {
+        av_log(NULL, AV_LOG_ERROR, "No codec name specified.\n");
+        return;
+    }
+
+    codec = encoder ? avcodec_find_encoder_by_name(name) :
+                      avcodec_find_decoder_by_name(name);
+
+    if (codec)
+        print_codec(codec);
+    else if ((desc = avcodec_descriptor_get_by_name(name))) {
+        int printed = 0;
+
+        while ((codec = next_codec_for_id(desc->id, codec, encoder))) {
+            printed = 1;
+            print_codec(codec);
+        }
+
+        if (!printed) {
+            av_log(NULL, AV_LOG_ERROR, "Codec '%s' is known to Libav, "
+                   "but no %s for it are available. Libav might need to be "
+                   "recompiled with additional external libraries.\n",
+                   name, encoder ? "encoders" : "decoders");
+        }
+    } else {
+        av_log(NULL, AV_LOG_ERROR, "Codec '%s' is not recognized by Libav.\n",
+               name);
+    }
+}
+
+static void show_help_demuxer(const char *name)
+{
+    const AVInputFormat *fmt = av_find_input_format(name);
+
+    if (!fmt) {
+        av_log(NULL, AV_LOG_ERROR, "Unknown format '%s'.\n", name);
+        return;
+    }
+
+    printf("Demuxer %s [%s]:\n", fmt->name, fmt->long_name);
+
+    if (fmt->extensions)
+        printf("    Common extensions: %s.\n", fmt->extensions);
+
+    if (fmt->priv_class)
+        show_help_children(fmt->priv_class, AV_OPT_FLAG_DECODING_PARAM);
+}
+
+static void show_help_muxer(const char *name)
+{
+    const AVCodecDescriptor *desc;
+    const AVOutputFormat *fmt = av_guess_format(name, NULL, NULL);
+
+    if (!fmt) {
+        av_log(NULL, AV_LOG_ERROR, "Unknown format '%s'.\n", name);
+        return;
+    }
+
+    printf("Muxer %s [%s]:\n", fmt->name, fmt->long_name);
+
+    if (fmt->extensions)
+        printf("    Common extensions: %s.\n", fmt->extensions);
+    if (fmt->mime_type)
+        printf("    Mime type: %s.\n", fmt->mime_type);
+    if (fmt->video_codec != AV_CODEC_ID_NONE &&
+        (desc = avcodec_descriptor_get(fmt->video_codec))) {
+        printf("    Default video codec: %s.\n", desc->name);
+    }
+    if (fmt->audio_codec != AV_CODEC_ID_NONE &&
+        (desc = avcodec_descriptor_get(fmt->audio_codec))) {
+        printf("    Default audio codec: %s.\n", desc->name);
+    }
+    if (fmt->subtitle_codec != AV_CODEC_ID_NONE &&
+        (desc = avcodec_descriptor_get(fmt->subtitle_codec))) {
+        printf("    Default subtitle codec: %s.\n", desc->name);
+    }
+
+    if (fmt->priv_class)
+        show_help_children(fmt->priv_class, AV_OPT_FLAG_ENCODING_PARAM);
+}
+
+int show_help(void *optctx, const char *opt, const char *arg)
+{
+    char *topic, *par;
+    av_log_set_callback(log_callback_help);
+
+    topic = av_strdup(arg ? arg : "");
+    par = strchr(topic, '=');
+    if (par)
+        *par++ = 0;
+
+    if (!*topic) {
+        show_help_default(topic, par);
+    } else if (!strcmp(topic, "decoder")) {
+        show_help_codec(par, 0);
+    } else if (!strcmp(topic, "encoder")) {
+        show_help_codec(par, 1);
+    } else if (!strcmp(topic, "demuxer")) {
+        show_help_demuxer(par);
+    } else if (!strcmp(topic, "muxer")) {
+        show_help_muxer(par);
+    } else {
+        show_help_default(topic, par);
+    }
+
+    av_freep(&topic);
     return 0;
 }
 
@@ -826,7 +1061,7 @@ int cmdutils_read_file(const char *filename, char **bufptr, size_t *size)
             ret = AVERROR_EOF;
     } else {
         ret = 0;
-        (*bufptr)[*size++] = '\0';
+        (*bufptr)[(*size)++] = '\0';
     }
 
     fclose(f);
@@ -1030,13 +1265,13 @@ void *grow_array(void *array, int elem_size, int *size, int new_size)
 {
     if (new_size >= INT_MAX / elem_size) {
         av_log(NULL, AV_LOG_ERROR, "Array too big.\n");
-        exit_program(1);
+        exit(1);
     }
     if (*size < new_size) {
         uint8_t *tmp = av_realloc(array, new_size*elem_size);
         if (!tmp) {
             av_log(NULL, AV_LOG_ERROR, "Could not alloc buffer.\n");
-            exit_program(1);
+            exit(1);
         }
         memset(tmp + *size*elem_size, 0, (new_size-*size) * elem_size);
         *size = new_size;
@@ -1081,7 +1316,7 @@ static int alloc_buffer(FrameBuffer **pool, AVCodecContext *s, FrameBuffer **pbu
         const int v_shift = i==0 ? 0 : v_chroma_shift;
         if (s->flags & CODEC_FLAG_EMU_EDGE)
             buf->data[i] = buf->base[i];
-        else
+        else if (buf->base[i])
             buf->data[i] = buf->base[i] +
                            FFALIGN((buf->linesize[i]*edge >> v_shift) +
                                    (pixel_size*edge >> h_shift), 32);

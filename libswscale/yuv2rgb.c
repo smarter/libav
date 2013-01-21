@@ -124,7 +124,7 @@ const int *sws_getCoefficients(int colorspace)
     {                                                                       \
         int y;                                                              \
                                                                             \
-        if (!alpha && c->srcFormat == PIX_FMT_YUV422P) {                    \
+        if (!alpha && c->srcFormat == AV_PIX_FMT_YUV422P) {                    \
             srcStride[1] *= 2;                                              \
             srcStride[2] *= 2;                                              \
         }                                                                   \
@@ -147,15 +147,15 @@ const int *sws_getCoefficients(int colorspace)
             while (h_size--) {                                              \
                 int av_unused U, V, Y;                                      \
 
-#define ENDYUV2RGBLINE(dst_delta)                   \
-    pu    += 4;                                     \
-    pv    += 4;                                     \
-    py_1  += 8;                                     \
-    py_2  += 8;                                     \
-    dst_1 += dst_delta;                             \
-    dst_2 += dst_delta;                             \
+#define ENDYUV2RGBLINE(dst_delta, ss)               \
+    pu    += 4 >> ss;                               \
+    pv    += 4 >> ss;                               \
+    py_1  += 8 >> ss;                               \
+    py_2  += 8 >> ss;                               \
+    dst_1 += dst_delta >> ss;                       \
+    dst_2 += dst_delta >> ss;                       \
     }                                               \
-    if (c->dstW & 4) {                              \
+    if (c->dstW & (4 >> ss)) {                      \
         int av_unused Y, U, V;                      \
 
 #define ENDYUV2RGBFUNC()                            \
@@ -165,7 +165,7 @@ const int *sws_getCoefficients(int colorspace)
     }
 
 #define CLOSEYUV2RGBFUNC(dst_delta)                 \
-    ENDYUV2RGBLINE(dst_delta)                       \
+    ENDYUV2RGBLINE(dst_delta, 0)                    \
     ENDYUV2RGBFUNC()
 
 YUV2RGBFUNC(yuv2rgb_c_48, uint8_t, 0)
@@ -184,7 +184,7 @@ YUV2RGBFUNC(yuv2rgb_c_48, uint8_t, 0)
     LOADCHROMA(3);
     PUTRGB48(dst_2, py_2, 3);
     PUTRGB48(dst_1, py_1, 3);
-ENDYUV2RGBLINE(48)
+ENDYUV2RGBLINE(48, 0)
     LOADCHROMA(0);
     PUTRGB48(dst_1, py_1, 0);
     PUTRGB48(dst_2, py_2, 0);
@@ -192,6 +192,10 @@ ENDYUV2RGBLINE(48)
     LOADCHROMA(1);
     PUTRGB48(dst_2, py_2, 1);
     PUTRGB48(dst_1, py_1, 1);
+ENDYUV2RGBLINE(48, 1)
+    LOADCHROMA(0);
+    PUTRGB48(dst_1, py_1, 0);
+    PUTRGB48(dst_2, py_2, 0);
 ENDYUV2RGBFUNC()
 
 YUV2RGBFUNC(yuv2rgb_c_bgr48, uint8_t, 0)
@@ -210,7 +214,7 @@ YUV2RGBFUNC(yuv2rgb_c_bgr48, uint8_t, 0)
     LOADCHROMA(3);
     PUTBGR48(dst_2, py_2, 3);
     PUTBGR48(dst_1, py_1, 3);
-ENDYUV2RGBLINE(48)
+ENDYUV2RGBLINE(48, 0)
     LOADCHROMA(0);
     PUTBGR48(dst_1, py_1, 0);
     PUTBGR48(dst_2, py_2, 0);
@@ -218,6 +222,10 @@ ENDYUV2RGBLINE(48)
     LOADCHROMA(1);
     PUTBGR48(dst_2, py_2, 1);
     PUTBGR48(dst_1, py_1, 1);
+ENDYUV2RGBLINE(48, 1)
+    LOADCHROMA(0);
+    PUTBGR48(dst_1, py_1, 0);
+    PUTBGR48(dst_2, py_2, 0);
 ENDYUV2RGBFUNC()
 
 YUV2RGBFUNC(yuv2rgb_c_32, uint32_t, 0)
@@ -236,7 +244,7 @@ YUV2RGBFUNC(yuv2rgb_c_32, uint32_t, 0)
     LOADCHROMA(3);
     PUTRGB(dst_2, py_2, 3);
     PUTRGB(dst_1, py_1, 3);
-ENDYUV2RGBLINE(8)
+ENDYUV2RGBLINE(8, 0)
     LOADCHROMA(0);
     PUTRGB(dst_1, py_1, 0);
     PUTRGB(dst_2, py_2, 0);
@@ -244,6 +252,10 @@ ENDYUV2RGBLINE(8)
     LOADCHROMA(1);
     PUTRGB(dst_2, py_2, 1);
     PUTRGB(dst_1, py_1, 1);
+ENDYUV2RGBLINE(8, 1)
+    LOADCHROMA(0);
+    PUTRGB(dst_1, py_1, 0);
+    PUTRGB(dst_2, py_2, 0);
 ENDYUV2RGBFUNC()
 
 YUV2RGBFUNC(yuva2rgba_c, uint32_t, 1)
@@ -264,7 +276,7 @@ YUV2RGBFUNC(yuva2rgba_c, uint32_t, 1)
     PUTRGBA(dst_1, py_1, pa_2, 3, 24);
     pa_1 += 8; \
     pa_2 += 8; \
-ENDYUV2RGBLINE(8)
+ENDYUV2RGBLINE(8, 0)
     LOADCHROMA(0);
     PUTRGBA(dst_1, py_1, pa_1, 0, 24);
     PUTRGBA(dst_2, py_2, pa_2, 0, 24);
@@ -272,6 +284,12 @@ ENDYUV2RGBLINE(8)
     LOADCHROMA(1);
     PUTRGBA(dst_2, py_2, pa_1, 1, 24);
     PUTRGBA(dst_1, py_1, pa_2, 1, 24);
+    pa_1 += 4; \
+    pa_2 += 4; \
+ENDYUV2RGBLINE(8, 1)
+    LOADCHROMA(0);
+    PUTRGBA(dst_1, py_1, pa_1, 0, 24);
+    PUTRGBA(dst_2, py_2, pa_2, 0, 24);
 ENDYUV2RGBFUNC()
 
 YUV2RGBFUNC(yuva2argb_c, uint32_t, 1)
@@ -292,7 +310,7 @@ YUV2RGBFUNC(yuva2argb_c, uint32_t, 1)
     PUTRGBA(dst_1, py_1, pa_1, 3, 0);
     pa_1 += 8; \
     pa_2 += 8; \
-ENDYUV2RGBLINE(8)
+ENDYUV2RGBLINE(8, 0)
     LOADCHROMA(0);
     PUTRGBA(dst_1, py_1, pa_1, 0, 0);
     PUTRGBA(dst_2, py_2, pa_2, 0, 0);
@@ -300,6 +318,12 @@ ENDYUV2RGBLINE(8)
     LOADCHROMA(1);
     PUTRGBA(dst_2, py_2, pa_2, 1, 0);
     PUTRGBA(dst_1, py_1, pa_1, 1, 0);
+    pa_1 += 4; \
+    pa_2 += 4; \
+ENDYUV2RGBLINE(8, 1)
+    LOADCHROMA(0);
+    PUTRGBA(dst_1, py_1, pa_1, 0, 0);
+    PUTRGBA(dst_2, py_2, pa_2, 0, 0);
 ENDYUV2RGBFUNC()
 
 YUV2RGBFUNC(yuv2rgb_c_24_rgb, uint8_t, 0)
@@ -318,7 +342,7 @@ YUV2RGBFUNC(yuv2rgb_c_24_rgb, uint8_t, 0)
     LOADCHROMA(3);
     PUTRGB24(dst_2, py_2, 3);
     PUTRGB24(dst_1, py_1, 3);
-ENDYUV2RGBLINE(24)
+ENDYUV2RGBLINE(24, 0)
     LOADCHROMA(0);
     PUTRGB24(dst_1, py_1, 0);
     PUTRGB24(dst_2, py_2, 0);
@@ -326,6 +350,10 @@ ENDYUV2RGBLINE(24)
     LOADCHROMA(1);
     PUTRGB24(dst_2, py_2, 1);
     PUTRGB24(dst_1, py_1, 1);
+ENDYUV2RGBLINE(24, 1)
+    LOADCHROMA(0);
+    PUTRGB24(dst_1, py_1, 0);
+    PUTRGB24(dst_2, py_2, 0);
 ENDYUV2RGBFUNC()
 
 // only trivial mods from yuv2rgb_c_24_rgb
@@ -345,7 +373,7 @@ YUV2RGBFUNC(yuv2rgb_c_24_bgr, uint8_t, 0)
     LOADCHROMA(3);
     PUTBGR24(dst_2, py_2, 3);
     PUTBGR24(dst_1, py_1, 3);
-ENDYUV2RGBLINE(24)
+ENDYUV2RGBLINE(24, 0)
     LOADCHROMA(0);
     PUTBGR24(dst_1, py_1, 0);
     PUTBGR24(dst_2, py_2, 0);
@@ -353,6 +381,10 @@ ENDYUV2RGBLINE(24)
     LOADCHROMA(1);
     PUTBGR24(dst_2, py_2, 1);
     PUTBGR24(dst_1, py_1, 1);
+ENDYUV2RGBLINE(24, 1)
+    LOADCHROMA(0);
+    PUTBGR24(dst_1, py_1, 0);
+    PUTBGR24(dst_2, py_2, 0);
 ENDYUV2RGBFUNC()
 
 // This is exactly the same code as yuv2rgb_c_32 except for the types of
@@ -550,44 +582,44 @@ SwsFunc ff_yuv2rgb_get_func_ptr(SwsContext *c)
            sws_format_name(c->srcFormat), sws_format_name(c->dstFormat));
 
     switch (c->dstFormat) {
-    case PIX_FMT_BGR48BE:
-    case PIX_FMT_BGR48LE:
+    case AV_PIX_FMT_BGR48BE:
+    case AV_PIX_FMT_BGR48LE:
         return yuv2rgb_c_bgr48;
-    case PIX_FMT_RGB48BE:
-    case PIX_FMT_RGB48LE:
+    case AV_PIX_FMT_RGB48BE:
+    case AV_PIX_FMT_RGB48LE:
         return yuv2rgb_c_48;
-    case PIX_FMT_ARGB:
-    case PIX_FMT_ABGR:
-        if (CONFIG_SWSCALE_ALPHA && c->srcFormat == PIX_FMT_YUVA420P)
+    case AV_PIX_FMT_ARGB:
+    case AV_PIX_FMT_ABGR:
+        if (CONFIG_SWSCALE_ALPHA && c->srcFormat == AV_PIX_FMT_YUVA420P)
             return yuva2argb_c;
-    case PIX_FMT_RGBA:
-    case PIX_FMT_BGRA:
-        if (CONFIG_SWSCALE_ALPHA && c->srcFormat == PIX_FMT_YUVA420P)
+    case AV_PIX_FMT_RGBA:
+    case AV_PIX_FMT_BGRA:
+        if (CONFIG_SWSCALE_ALPHA && c->srcFormat == AV_PIX_FMT_YUVA420P)
             return yuva2rgba_c;
         else
             return yuv2rgb_c_32;
-    case PIX_FMT_RGB24:
+    case AV_PIX_FMT_RGB24:
         return yuv2rgb_c_24_rgb;
-    case PIX_FMT_BGR24:
+    case AV_PIX_FMT_BGR24:
         return yuv2rgb_c_24_bgr;
-    case PIX_FMT_RGB565:
-    case PIX_FMT_BGR565:
-    case PIX_FMT_RGB555:
-    case PIX_FMT_BGR555:
+    case AV_PIX_FMT_RGB565:
+    case AV_PIX_FMT_BGR565:
+    case AV_PIX_FMT_RGB555:
+    case AV_PIX_FMT_BGR555:
         return yuv2rgb_c_16;
-    case PIX_FMT_RGB444:
-    case PIX_FMT_BGR444:
+    case AV_PIX_FMT_RGB444:
+    case AV_PIX_FMT_BGR444:
         return yuv2rgb_c_12_ordered_dither;
-    case PIX_FMT_RGB8:
-    case PIX_FMT_BGR8:
+    case AV_PIX_FMT_RGB8:
+    case AV_PIX_FMT_BGR8:
         return yuv2rgb_c_8_ordered_dither;
-    case PIX_FMT_RGB4:
-    case PIX_FMT_BGR4:
+    case AV_PIX_FMT_RGB4:
+    case AV_PIX_FMT_BGR4:
         return yuv2rgb_c_4_ordered_dither;
-    case PIX_FMT_RGB4_BYTE:
-    case PIX_FMT_BGR4_BYTE:
+    case AV_PIX_FMT_RGB4_BYTE:
+    case AV_PIX_FMT_BGR4_BYTE:
         return yuv2rgb_c_4b_ordered_dither;
-    case PIX_FMT_MONOBLACK:
+    case AV_PIX_FMT_MONOBLACK:
         return yuv2rgb_c_1_ordered_dither;
     default:
         assert(0);
@@ -638,25 +670,25 @@ av_cold int ff_yuv2rgb_c_init_tables(SwsContext *c, const int inv_table[4],
                                      int fullRange, int brightness,
                                      int contrast, int saturation)
 {
-    const int isRgb = c->dstFormat == PIX_FMT_RGB32     ||
-                      c->dstFormat == PIX_FMT_RGB32_1   ||
-                      c->dstFormat == PIX_FMT_BGR24     ||
-                      c->dstFormat == PIX_FMT_RGB565BE  ||
-                      c->dstFormat == PIX_FMT_RGB565LE  ||
-                      c->dstFormat == PIX_FMT_RGB555BE  ||
-                      c->dstFormat == PIX_FMT_RGB555LE  ||
-                      c->dstFormat == PIX_FMT_RGB444BE  ||
-                      c->dstFormat == PIX_FMT_RGB444LE  ||
-                      c->dstFormat == PIX_FMT_RGB8      ||
-                      c->dstFormat == PIX_FMT_RGB4      ||
-                      c->dstFormat == PIX_FMT_RGB4_BYTE ||
-                      c->dstFormat == PIX_FMT_MONOBLACK;
-    const int isNotNe = c->dstFormat == PIX_FMT_NE(RGB565LE, RGB565BE) ||
-                        c->dstFormat == PIX_FMT_NE(RGB555LE, RGB555BE) ||
-                        c->dstFormat == PIX_FMT_NE(RGB444LE, RGB444BE) ||
-                        c->dstFormat == PIX_FMT_NE(BGR565LE, BGR565BE) ||
-                        c->dstFormat == PIX_FMT_NE(BGR555LE, BGR555BE) ||
-                        c->dstFormat == PIX_FMT_NE(BGR444LE, BGR444BE);
+    const int isRgb = c->dstFormat == AV_PIX_FMT_RGB32     ||
+                      c->dstFormat == AV_PIX_FMT_RGB32_1   ||
+                      c->dstFormat == AV_PIX_FMT_BGR24     ||
+                      c->dstFormat == AV_PIX_FMT_RGB565BE  ||
+                      c->dstFormat == AV_PIX_FMT_RGB565LE  ||
+                      c->dstFormat == AV_PIX_FMT_RGB555BE  ||
+                      c->dstFormat == AV_PIX_FMT_RGB555LE  ||
+                      c->dstFormat == AV_PIX_FMT_RGB444BE  ||
+                      c->dstFormat == AV_PIX_FMT_RGB444LE  ||
+                      c->dstFormat == AV_PIX_FMT_RGB8      ||
+                      c->dstFormat == AV_PIX_FMT_RGB4      ||
+                      c->dstFormat == AV_PIX_FMT_RGB4_BYTE ||
+                      c->dstFormat == AV_PIX_FMT_MONOBLACK;
+    const int isNotNe = c->dstFormat == AV_PIX_FMT_NE(RGB565LE, RGB565BE) ||
+                        c->dstFormat == AV_PIX_FMT_NE(RGB555LE, RGB555BE) ||
+                        c->dstFormat == AV_PIX_FMT_NE(RGB444LE, RGB444BE) ||
+                        c->dstFormat == AV_PIX_FMT_NE(BGR565LE, BGR565BE) ||
+                        c->dstFormat == AV_PIX_FMT_NE(BGR555LE, BGR555BE) ||
+                        c->dstFormat == AV_PIX_FMT_NE(BGR444LE, BGR444BE);
     const int bpp = c->dstFormatBpp;
     uint8_t *y_table;
     uint16_t *y_table16;
@@ -824,8 +856,8 @@ av_cold int ff_yuv2rgb_c_init_tables(SwsContext *c, const int inv_table[4],
         fill_gv_table(c->table_gV, 1, cgv);
         break;
     case 32:
-        base      = (c->dstFormat == PIX_FMT_RGB32_1 ||
-                     c->dstFormat == PIX_FMT_BGR32_1) ? 8 : 0;
+        base      = (c->dstFormat == AV_PIX_FMT_RGB32_1 ||
+                     c->dstFormat == AV_PIX_FMT_BGR32_1) ? 8 : 0;
         rbase     = base + (isRgb ? 16 : 0);
         gbase     = base + 8;
         bbase     = base + (isRgb ? 0 : 16);

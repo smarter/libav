@@ -71,13 +71,8 @@ void ff_rtp_send_punch_packets(URLContext* rtp_handle);
  */
 int ff_rtp_check_and_send_back_rr(RTPDemuxContext *s, int count);
 
-/**
- * Get the file handle for the RTCP socket.
- */
-int ff_rtp_get_rtcp_file_handle(URLContext *h);
-
 // these statistics are used for rtcp receiver reports...
-typedef struct {
+typedef struct RTPStatistics {
     uint16_t max_seq;           ///< highest sequence number seen
     uint32_t cycles;            ///< shifted count of sequence number cycles
     uint32_t base_seq;          ///< base sequence number

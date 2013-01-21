@@ -65,7 +65,7 @@
 /** Large enough for maximum possible frame size when the specification limit is ignored */
 #define AC3_FRAME_BUFFER_SIZE 32768
 
-typedef struct {
+typedef struct AC3DecodeContext {
     AVClass        *class;                  ///< class for AVOptions
     AVCodecContext *avctx;                  ///< parent context
     AVFrame frame;                          ///< AVFrame for decoded output
@@ -220,9 +220,6 @@ int ff_eac3_parse_header(AC3DecodeContext *s);
  * This is used when AHT mode is enabled.
  */
 void ff_eac3_decode_transform_coeffs_aht_ch(AC3DecodeContext *s, int ch);
-
-void ff_ac3_downmix_c(float (*samples)[256], float (*matrix)[2],
-                      int out_ch, int in_ch, int len);
 
 /**
  * Apply spectral extension to each channel by copying lower frequency

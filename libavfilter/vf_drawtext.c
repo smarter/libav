@@ -154,34 +154,34 @@ static const AVOption drawtext_options[]= {
 {"fontcolor","set foreground color", OFFSET(fontcolor_string),   AV_OPT_TYPE_STRING, {.str=NULL},  CHAR_MIN, CHAR_MAX },
 {"boxcolor", "set box color",        OFFSET(boxcolor_string),    AV_OPT_TYPE_STRING, {.str=NULL},  CHAR_MIN, CHAR_MAX },
 {"shadowcolor", "set shadow color",  OFFSET(shadowcolor_string), AV_OPT_TYPE_STRING, {.str=NULL},  CHAR_MIN, CHAR_MAX },
-{"box",      "set box",              OFFSET(draw_box),           AV_OPT_TYPE_INT,    {.dbl=0},     0,        1        },
-{"fontsize", "set font size",        OFFSET(fontsize),           AV_OPT_TYPE_INT,    {.dbl=16},    1,        72       },
+{"box",      "set box",              OFFSET(draw_box),           AV_OPT_TYPE_INT,    {.i64=0},     0,        1        },
+{"fontsize", "set font size",        OFFSET(fontsize),           AV_OPT_TYPE_INT,    {.i64=16},    1,        72       },
 {"x",        "set x",                OFFSET(x_expr),             AV_OPT_TYPE_STRING, {.str="0"},   CHAR_MIN, CHAR_MAX },
 {"y",        "set y",                OFFSET(y_expr),             AV_OPT_TYPE_STRING, {.str="0"},   CHAR_MIN, CHAR_MAX },
-{"shadowx",  "set x",                OFFSET(shadowx),            AV_OPT_TYPE_INT,    {.dbl=0},     INT_MIN,  INT_MAX  },
-{"shadowy",  "set y",                OFFSET(shadowy),            AV_OPT_TYPE_INT,    {.dbl=0},     INT_MIN,  INT_MAX  },
-{"tabsize",  "set tab size",         OFFSET(tabsize),            AV_OPT_TYPE_INT,    {.dbl=4},     0,        INT_MAX  },
+{"shadowx",  "set x",                OFFSET(shadowx),            AV_OPT_TYPE_INT,    {.i64=0},     INT_MIN,  INT_MAX  },
+{"shadowy",  "set y",                OFFSET(shadowy),            AV_OPT_TYPE_INT,    {.i64=0},     INT_MIN,  INT_MAX  },
+{"tabsize",  "set tab size",         OFFSET(tabsize),            AV_OPT_TYPE_INT,    {.i64=4},     0,        INT_MAX  },
 {"draw",     "if false do not draw", OFFSET(d_expr),             AV_OPT_TYPE_STRING, {.str="1"},   CHAR_MIN, CHAR_MAX },
 {"fix_bounds", "if true, check and fix text coords to avoid clipping",
-                                     OFFSET(fix_bounds),         AV_OPT_TYPE_INT,    {.dbl=1},     0,        1        },
+                                     OFFSET(fix_bounds),         AV_OPT_TYPE_INT,    {.i64=1},     0,        1        },
 
 /* FT_LOAD_* flags */
-{"ft_load_flags", "set font loading flags for libfreetype",   OFFSET(ft_load_flags),  AV_OPT_TYPE_FLAGS,  {.dbl=FT_LOAD_DEFAULT|FT_LOAD_RENDER}, 0, INT_MAX, 0, "ft_load_flags" },
-{"default",                     "set default",                     0, AV_OPT_TYPE_CONST, {FT_LOAD_DEFAULT},                     INT_MIN, INT_MAX, 0, "ft_load_flags" },
-{"no_scale",                    "set no_scale",                    0, AV_OPT_TYPE_CONST, {FT_LOAD_NO_SCALE},                    INT_MIN, INT_MAX, 0, "ft_load_flags" },
-{"no_hinting",                  "set no_hinting",                  0, AV_OPT_TYPE_CONST, {FT_LOAD_NO_HINTING},                  INT_MIN, INT_MAX, 0, "ft_load_flags" },
-{"render",                      "set render",                      0, AV_OPT_TYPE_CONST, {FT_LOAD_RENDER},                      INT_MIN, INT_MAX, 0, "ft_load_flags" },
-{"no_bitmap",                   "set no_bitmap",                   0, AV_OPT_TYPE_CONST, {FT_LOAD_NO_BITMAP},                   INT_MIN, INT_MAX, 0, "ft_load_flags" },
-{"vertical_layout",             "set vertical_layout",             0, AV_OPT_TYPE_CONST, {FT_LOAD_VERTICAL_LAYOUT},             INT_MIN, INT_MAX, 0, "ft_load_flags" },
-{"force_autohint",              "set force_autohint",              0, AV_OPT_TYPE_CONST, {FT_LOAD_FORCE_AUTOHINT},              INT_MIN, INT_MAX, 0, "ft_load_flags" },
-{"crop_bitmap",                 "set crop_bitmap",                 0, AV_OPT_TYPE_CONST, {FT_LOAD_CROP_BITMAP},                 INT_MIN, INT_MAX, 0, "ft_load_flags" },
-{"pedantic",                    "set pedantic",                    0, AV_OPT_TYPE_CONST, {FT_LOAD_PEDANTIC},                    INT_MIN, INT_MAX, 0, "ft_load_flags" },
-{"ignore_global_advance_width", "set ignore_global_advance_width", 0, AV_OPT_TYPE_CONST, {FT_LOAD_IGNORE_GLOBAL_ADVANCE_WIDTH}, INT_MIN, INT_MAX, 0, "ft_load_flags" },
-{"no_recurse",                  "set no_recurse",                  0, AV_OPT_TYPE_CONST, {FT_LOAD_NO_RECURSE},                  INT_MIN, INT_MAX, 0, "ft_load_flags" },
-{"ignore_transform",            "set ignore_transform",            0, AV_OPT_TYPE_CONST, {FT_LOAD_IGNORE_TRANSFORM},            INT_MIN, INT_MAX, 0, "ft_load_flags" },
-{"monochrome",                  "set monochrome",                  0, AV_OPT_TYPE_CONST, {FT_LOAD_MONOCHROME},                  INT_MIN, INT_MAX, 0, "ft_load_flags" },
-{"linear_design",               "set linear_design",               0, AV_OPT_TYPE_CONST, {FT_LOAD_LINEAR_DESIGN},               INT_MIN, INT_MAX, 0, "ft_load_flags" },
-{"no_autohint",                 "set no_autohint",                 0, AV_OPT_TYPE_CONST, {FT_LOAD_NO_AUTOHINT},                 INT_MIN, INT_MAX, 0, "ft_load_flags" },
+{"ft_load_flags", "set font loading flags for libfreetype",   OFFSET(ft_load_flags),  AV_OPT_TYPE_FLAGS,  {.i64=FT_LOAD_DEFAULT|FT_LOAD_RENDER}, 0, INT_MAX, 0, "ft_load_flags" },
+{"default",                     "set default",                     0, AV_OPT_TYPE_CONST, {.i64 = FT_LOAD_DEFAULT},                     INT_MIN, INT_MAX, 0, "ft_load_flags" },
+{"no_scale",                    "set no_scale",                    0, AV_OPT_TYPE_CONST, {.i64 = FT_LOAD_NO_SCALE},                    INT_MIN, INT_MAX, 0, "ft_load_flags" },
+{"no_hinting",                  "set no_hinting",                  0, AV_OPT_TYPE_CONST, {.i64 = FT_LOAD_NO_HINTING},                  INT_MIN, INT_MAX, 0, "ft_load_flags" },
+{"render",                      "set render",                      0, AV_OPT_TYPE_CONST, {.i64 = FT_LOAD_RENDER},                      INT_MIN, INT_MAX, 0, "ft_load_flags" },
+{"no_bitmap",                   "set no_bitmap",                   0, AV_OPT_TYPE_CONST, {.i64 = FT_LOAD_NO_BITMAP},                   INT_MIN, INT_MAX, 0, "ft_load_flags" },
+{"vertical_layout",             "set vertical_layout",             0, AV_OPT_TYPE_CONST, {.i64 = FT_LOAD_VERTICAL_LAYOUT},             INT_MIN, INT_MAX, 0, "ft_load_flags" },
+{"force_autohint",              "set force_autohint",              0, AV_OPT_TYPE_CONST, {.i64 = FT_LOAD_FORCE_AUTOHINT},              INT_MIN, INT_MAX, 0, "ft_load_flags" },
+{"crop_bitmap",                 "set crop_bitmap",                 0, AV_OPT_TYPE_CONST, {.i64 = FT_LOAD_CROP_BITMAP},                 INT_MIN, INT_MAX, 0, "ft_load_flags" },
+{"pedantic",                    "set pedantic",                    0, AV_OPT_TYPE_CONST, {.i64 = FT_LOAD_PEDANTIC},                    INT_MIN, INT_MAX, 0, "ft_load_flags" },
+{"ignore_global_advance_width", "set ignore_global_advance_width", 0, AV_OPT_TYPE_CONST, {.i64 = FT_LOAD_IGNORE_GLOBAL_ADVANCE_WIDTH}, INT_MIN, INT_MAX, 0, "ft_load_flags" },
+{"no_recurse",                  "set no_recurse",                  0, AV_OPT_TYPE_CONST, {.i64 = FT_LOAD_NO_RECURSE},                  INT_MIN, INT_MAX, 0, "ft_load_flags" },
+{"ignore_transform",            "set ignore_transform",            0, AV_OPT_TYPE_CONST, {.i64 = FT_LOAD_IGNORE_TRANSFORM},            INT_MIN, INT_MAX, 0, "ft_load_flags" },
+{"monochrome",                  "set monochrome",                  0, AV_OPT_TYPE_CONST, {.i64 = FT_LOAD_MONOCHROME},                  INT_MIN, INT_MAX, 0, "ft_load_flags" },
+{"linear_design",               "set linear_design",               0, AV_OPT_TYPE_CONST, {.i64 = FT_LOAD_LINEAR_DESIGN},               INT_MIN, INT_MAX, 0, "ft_load_flags" },
+{"no_autohint",                 "set no_autohint",                 0, AV_OPT_TYPE_CONST, {.i64 = FT_LOAD_NO_AUTOHINT},                 INT_MIN, INT_MAX, 0, "ft_load_flags" },
 {NULL},
 };
 
@@ -389,14 +389,14 @@ static av_cold int init(AVFilterContext *ctx, const char *args)
 
 static int query_formats(AVFilterContext *ctx)
 {
-    static const enum PixelFormat pix_fmts[] = {
-        PIX_FMT_ARGB,    PIX_FMT_RGBA,
-        PIX_FMT_ABGR,    PIX_FMT_BGRA,
-        PIX_FMT_RGB24,   PIX_FMT_BGR24,
-        PIX_FMT_YUV420P, PIX_FMT_YUV444P,
-        PIX_FMT_YUV422P, PIX_FMT_YUV411P,
-        PIX_FMT_YUV410P, PIX_FMT_YUV440P,
-        PIX_FMT_NONE
+    static const enum AVPixelFormat pix_fmts[] = {
+        AV_PIX_FMT_ARGB,    AV_PIX_FMT_RGBA,
+        AV_PIX_FMT_ABGR,    AV_PIX_FMT_BGRA,
+        AV_PIX_FMT_RGB24,   AV_PIX_FMT_BGR24,
+        AV_PIX_FMT_YUV420P, AV_PIX_FMT_YUV444P,
+        AV_PIX_FMT_YUV422P, AV_PIX_FMT_YUV411P,
+        AV_PIX_FMT_YUV410P, AV_PIX_FMT_YUV440P,
+        AV_PIX_FMT_NONE
     };
 
     ff_set_common_formats(ctx, ff_make_format_list(pix_fmts));
@@ -879,6 +879,30 @@ static int end_frame(AVFilterLink *inlink)
     return 0;
 }
 
+static const AVFilterPad avfilter_vf_drawtext_inputs[] = {
+    {
+        .name             = "default",
+        .type             = AVMEDIA_TYPE_VIDEO,
+        .get_video_buffer = ff_null_get_video_buffer,
+        .start_frame      = start_frame,
+        .draw_slice       = null_draw_slice,
+        .end_frame        = end_frame,
+        .config_props     = config_input,
+        .min_perms        = AV_PERM_WRITE |
+                            AV_PERM_READ,
+        .rej_perms = AV_PERM_PRESERVE
+    },
+    { NULL }
+};
+
+static const AVFilterPad avfilter_vf_drawtext_outputs[] = {
+    {
+        .name = "default",
+        .type = AVMEDIA_TYPE_VIDEO,
+    },
+    { NULL }
+};
+
 AVFilter avfilter_vf_drawtext = {
     .name          = "drawtext",
     .description   = NULL_IF_CONFIG_SMALL("Draw text on top of video frames using libfreetype library."),
@@ -887,18 +911,6 @@ AVFilter avfilter_vf_drawtext = {
     .uninit        = uninit,
     .query_formats = query_formats,
 
-    .inputs    = (const AVFilterPad[]) {{ .name             = "default",
-                                          .type             = AVMEDIA_TYPE_VIDEO,
-                                          .get_video_buffer = ff_null_get_video_buffer,
-                                          .start_frame      = start_frame,
-                                          .draw_slice       = null_draw_slice,
-                                          .end_frame        = end_frame,
-                                          .config_props     = config_input,
-                                          .min_perms        = AV_PERM_WRITE |
-                                                              AV_PERM_READ,
-                                          .rej_perms        = AV_PERM_PRESERVE },
-                                        { .name = NULL}},
-    .outputs   = (const AVFilterPad[]) {{ .name             = "default",
-                                          .type             = AVMEDIA_TYPE_VIDEO, },
-                                        { .name = NULL}},
+    .inputs    = avfilter_vf_drawtext_inputs,
+    .outputs   = avfilter_vf_drawtext_outputs,
 };

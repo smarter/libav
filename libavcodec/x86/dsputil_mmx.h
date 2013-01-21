@@ -26,7 +26,7 @@
 #include "libavcodec/dsputil.h"
 #include "libavutil/x86/asm.h"
 
-typedef struct { uint64_t a, b; } xmm_reg;
+typedef struct xmm_reg { uint64_t a, b; } xmm_reg;
 
 extern const uint64_t ff_bone;
 extern const uint64_t ff_wtwo;
@@ -101,10 +101,6 @@ void ff_put_rv40_qpel8_mc33_mmx(uint8_t *block, uint8_t *pixels, int line_size);
 void ff_put_rv40_qpel16_mc33_mmx(uint8_t *block, uint8_t *pixels, int line_size);
 void ff_avg_rv40_qpel8_mc33_mmx(uint8_t *block, uint8_t *pixels, int line_size);
 void ff_avg_rv40_qpel16_mc33_mmx(uint8_t *block, uint8_t *pixels, int line_size);
-
-void ff_mmx_idct(DCTELEM *block);
-void ff_mmxext_idct(DCTELEM *block);
-
 
 void ff_deinterlace_line_mmx(uint8_t *dst,
                              const uint8_t *lum_m4, const uint8_t *lum_m3,

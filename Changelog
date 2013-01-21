@@ -42,6 +42,15 @@ version <next>:
 - RTMPE protocol support
 - RTMPTE protocol support
 - Canopus Lossless Codec decoder
+- avconv -shortest option is now per-output file,
+  -pass and -passlogfile are now per-output stream
+- Ut Video encoder
+- Microsoft Screen 2 decoder
+- RTP depacketization of JPEG
+- Smooth Streaming live segmenter muxer
+- RTP packetization of JPEG
+- Opus decoder and encoder using libopus
+- remove -same_quant, it hasn't worked for years
 
 
 version 0.8:
