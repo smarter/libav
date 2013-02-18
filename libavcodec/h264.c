@@ -1311,9 +1311,6 @@ static int decode_nal_units(H264Context *h, const uint8_t *buf, int buf_size,
 static av_cold void common_init(H264Context *h)
 {
 
-    h->width    = h->avctx->width;
-    h->height   = h->avctx->height;
-
     h->bit_depth_luma    = 8;
     h->chroma_format_idc = 1;
 
@@ -2945,7 +2942,26 @@ static int h264_slice_header_init(H264Context *h, int reinit)
                     h->avctx->thread_count : 1;
     int i;
 
-    avcodec_set_dimensions(h->avctx, h->width, h->height);
+    h->avctx->coded_width  = h->width;
+    h->avctx->coded_height = h->height;
+    h->avctx->width        = h->width - (2 >> CHROMA444) * (h->sps.crop_right +
+                                                            h->sps.crop_left);
+    h->avctx->height       = h->height - ((h->sps.frame_mbs_only_flag ? 1 : 2) <<
+                                          h->chroma_y_shift) *
+                                         (h->sps.crop_top + h->sps.crop_bottom);
+
+    if (h->avctx->width <= 0 || h->avctx->height <= 0) {
+        av_log(h->avctx, AV_LOG_ERROR, "Invalid cropped dimensions: %dx%d.\n",
+               h->avctx->width, h->avctx->height);
+        if (h->avctx->err_recognition & AV_EF_EXPLODE)
+            return AVERROR_INVALIDDATA;
+
+        av_log(h->avctx, AV_LOG_WARNING, "Ignoring cropping information.\n");
+        h->sps.crop_bottom = h->sps.crop_top = h->sps.crop_right = h->sps.crop_left = 0;
+        h->avctx->width  = h->width;
+        h->avctx->height = h->height;
+    }
+
     h->avctx->sample_aspect_ratio = h->sps.sar;
     av_assert0(h->avctx->sample_aspect_ratio.den);
     av_pix_fmt_get_chroma_sub_sample(h->avctx->pix_fmt,
@@ -3156,17 +3172,8 @@ static int decode_slice_header(H264Context *h, H264Context *h0)
 
     h->chroma_y_shift = h->sps.chroma_format_idc <= 1; // 400 uses yuv420p
 
-    h->width = 16 * h->mb_width - (2 >> CHROMA444) * FFMIN(h->sps.crop_right, (8 << CHROMA444) - 1);
-    if (h->sps.frame_mbs_only_flag)
-        h->height = 16 * h->mb_height - (1 << h->chroma_y_shift) * FFMIN(h->sps.crop_bottom, (16 >> h->chroma_y_shift) - 1);
-    else
-        h->height = 16 * h->mb_height - (2 << h->chroma_y_shift) * FFMIN(h->sps.crop_bottom, (16 >> h->chroma_y_shift) - 1);
-
-    if (FFALIGN(h->avctx->width,  16) == h->width &&
-        FFALIGN(h->avctx->height, 16) == h->height) {
-        h->width  = h->avctx->width;
-        h->height = h->avctx->height;
-    }
+    h->width  = 16 * h->mb_width;
+    h->height = 16 * h->mb_height;
 
     if (h->sps.video_signal_type_present_flag) {
         h->avctx->color_range = h->sps.full_range ? AVCOL_RANGE_JPEG
@@ -3181,8 +3188,8 @@ static int decode_slice_header(H264Context *h, H264Context *h0)
     }
 
     if (h->context_initialized &&
-        (h->width  != h->avctx->width   ||
-         h->height != h->avctx->height  ||
+        (h->width  != h->avctx->coded_width   ||
+         h->height != h->avctx->coded_height  ||
          needs_reinit)) {
 
         if (h != h0) {
@@ -4583,6 +4590,25 @@ static int get_consumed_bytes(int pos, int buf_size)
     return pos;
 }
 
+static int output_frame(H264Context *h, AVFrame *dst, AVFrame *src)
+{
+    int i;
+    int ret = av_frame_ref(dst, src);
+    if (ret < 0)
+        return ret;
+
+    for (i = 0; i < 3; i++) {
+        int step_x = (2 >> CHROMA444);
+        int step_y = (h->sps.frame_mbs_only_flag ? 1 : 2) << h->chroma_y_shift;
+        int hshift = (i > 0) ? h->chroma_x_shift : 0;
+        int vshift = (i > 0) ? h->chroma_y_shift : 0;
+        int off    = (((step_x * h->sps.crop_left) >> hshift) << h->pixel_shift) +
+                      ((step_y * h->sps.crop_top) >> vshift) * dst->linesize[i];
+        dst->data[i] += off;
+    }
+    return 0;
+}
+
 static int decode_frame(AVCodecContext *avctx, void *data,
                         int *got_frame, AVPacket *avpkt)
 {
@@ -4620,7 +4646,8 @@ out:
             h->delayed_pic[i] = h->delayed_pic[i + 1];
 
         if (out) {
-            if ((ret = av_frame_ref(pict, &out->f)) < 0)
+            ret = output_frame(h, pict, &out->f);
+            if (ret < 0)
                 return ret;
             *got_frame = 1;
         }
@@ -4655,7 +4682,8 @@ out:
             /* Wait for second field. */
             *got_frame = 0;
         } else {
-            if ((ret = av_frame_ref(pict, &h->next_output_pic->f)) < 0)
+            ret = output_frame(h, pict, &h->next_output_pic->f);
+            if (ret < 0)
                 return ret;
             *got_frame = 1;
         }
