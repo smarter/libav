@@ -537,14 +537,19 @@ static void compat_release_buffer(void *opaque, uint8_t *data)
 
 int ff_get_buffer(AVCodecContext *avctx, AVFrame *frame, int flags)
 {
+    int orig_width = 0, orig_height = 0;
     int ret;
 
     switch (avctx->codec_type) {
     case AVMEDIA_TYPE_VIDEO:
         if (!frame->width)
-            frame->width               = avctx->width;
+            frame->width               = FFMAX(avctx->width, avctx->coded_width);
+        else
+            orig_width = frame->width;
         if (!frame->height)
-            frame->height              = avctx->height;
+            frame->height              = FFMAX(avctx->height, avctx->coded_height);
+        else
+            orig_height = frame->height;
         if (frame->format < 0)
             frame->format              = avctx->pix_fmt;
         if (!frame->sample_aspect_ratio.num)
@@ -674,6 +679,11 @@ do {                                                                    \
 
         av_buffer_unref(&dummy_buf);
 
+        if (!orig_width)
+            frame->width  = avctx->width;
+        if (!orig_height)
+            frame->height = avctx->height;
+
         return 0;
 
 fail:
@@ -684,7 +694,14 @@ fail:
     }
 #endif
 
-    return avctx->get_buffer2(avctx, frame, flags);
+    ret = avctx->get_buffer2(avctx, frame, flags);
+
+    if (!orig_width)
+        frame->width  = avctx->width;
+    if (!orig_height)
+        frame->height = avctx->height;
+
+    return ret;
 }
 
 int ff_reget_buffer(AVCodecContext *avctx, AVFrame *frame)
