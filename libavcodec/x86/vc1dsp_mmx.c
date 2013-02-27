@@ -494,7 +494,7 @@ DECLARE_FUNCTION(3, 2)
 DECLARE_FUNCTION(3, 3)
 
 static void vc1_inv_trans_4x4_dc_mmxext(uint8_t *dest, int linesize,
-                                        DCTELEM *block)
+                                        int16_t *block)
 {
     int dc = block[0];
     dc = (17 * dc +  4) >> 3;
@@ -533,7 +533,7 @@ static void vc1_inv_trans_4x4_dc_mmxext(uint8_t *dest, int linesize,
 }
 
 static void vc1_inv_trans_4x8_dc_mmxext(uint8_t *dest, int linesize,
-                                        DCTELEM *block)
+                                        int16_t *block)
 {
     int dc = block[0];
     dc = (17 * dc +  4) >> 3;
@@ -595,7 +595,7 @@ static void vc1_inv_trans_4x8_dc_mmxext(uint8_t *dest, int linesize,
 }
 
 static void vc1_inv_trans_8x4_dc_mmxext(uint8_t *dest, int linesize,
-                                        DCTELEM *block)
+                                        int16_t *block)
 {
     int dc = block[0];
     dc = ( 3 * dc +  1) >> 1;
@@ -634,7 +634,7 @@ static void vc1_inv_trans_8x4_dc_mmxext(uint8_t *dest, int linesize,
 }
 
 static void vc1_inv_trans_8x8_dc_mmxext(uint8_t *dest, int linesize,
-                                        DCTELEM *block)
+                                        int16_t *block)
 {
     int dc = block[0];
     dc = (3 * dc +  1) >> 1;
@@ -697,7 +697,9 @@ static void vc1_inv_trans_8x8_dc_mmxext(uint8_t *dest, int linesize,
 
 av_cold void ff_vc1dsp_init_mmx(VC1DSPContext *dsp)
 {
+#if HAVE_YASM
         dsp->put_vc1_mspel_pixels_tab[ 0] = ff_put_vc1_mspel_mc00_mmx;
+#endif /* HAVE_YASM */
         dsp->put_vc1_mspel_pixels_tab[ 4] = put_vc1_mspel_mc01_mmx;
         dsp->put_vc1_mspel_pixels_tab[ 8] = put_vc1_mspel_mc02_mmx;
         dsp->put_vc1_mspel_pixels_tab[12] = put_vc1_mspel_mc03_mmx;
@@ -720,7 +722,9 @@ av_cold void ff_vc1dsp_init_mmx(VC1DSPContext *dsp)
 
 av_cold void ff_vc1dsp_init_mmxext(VC1DSPContext *dsp)
 {
+#if HAVE_YASM
         dsp->avg_vc1_mspel_pixels_tab[ 0] = ff_avg_vc1_mspel_mc00_mmxext;
+#endif /* HAVE_YASM */
         dsp->avg_vc1_mspel_pixels_tab[ 4] = avg_vc1_mspel_mc01_mmxext;
         dsp->avg_vc1_mspel_pixels_tab[ 8] = avg_vc1_mspel_mc02_mmxext;
         dsp->avg_vc1_mspel_pixels_tab[12] = avg_vc1_mspel_mc03_mmxext;

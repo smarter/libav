@@ -472,7 +472,7 @@ static av_cold int rv10_decode_init(AVCodecContext *avctx)
     if (ff_MPV_common_init(s) < 0)
         return -1;
 
-    ff_h263_decode_init_vlc(s);
+    ff_h263_decode_init_vlc();
 
     /* init rv vlc */
     if (!done) {
@@ -528,13 +528,13 @@ static int rv10_decode_packet(AVCodecContext *avctx,
 
     if ((s->mb_x == 0 && s->mb_y == 0) || s->current_picture_ptr==NULL) {
         if(s->current_picture_ptr){ //FIXME write parser so we always have complete frames?
-            ff_er_frame_end(s);
+            ff_er_frame_end(&s->er);
             ff_MPV_frame_end(s);
             s->mb_x= s->mb_y = s->resync_mb_x = s->resync_mb_y= 0;
         }
         if(ff_MPV_frame_start(s, avctx) < 0)
             return -1;
-        ff_er_frame_start(s);
+        ff_mpeg_er_frame_start(s);
     } else {
         if (s->current_picture_ptr->f.pict_type != s->pict_type) {
             av_log(s->avctx, AV_LOG_ERROR, "Slice type mismatch\n");
@@ -626,7 +626,7 @@ static int rv10_decode_packet(AVCodecContext *avctx,
         if(ret == SLICE_END) break;
     }
 
-    ff_er_add_slice(s, start_mb_x, s->resync_mb_y, s->mb_x-1, s->mb_y, ER_MB_END);
+    ff_er_add_slice(&s->er, start_mb_x, s->resync_mb_y, s->mb_x-1, s->mb_y, ER_MB_END);
 
     return active_bits_size;
 }
@@ -644,7 +644,7 @@ static int rv10_decode_frame(AVCodecContext *avctx,
     const uint8_t *buf = avpkt->data;
     int buf_size = avpkt->size;
     MpegEncContext *s = avctx->priv_data;
-    int i;
+    int i, ret;
     AVFrame *pict = data;
     int slice_count;
     const uint8_t *slices_hdr = NULL;
@@ -659,11 +659,15 @@ static int rv10_decode_frame(AVCodecContext *avctx,
     if(!avctx->slice_count){
         slice_count = (*buf++) + 1;
         buf_size--;
+
+        if (!slice_count || buf_size <= 8 * slice_count) {
+            av_log(avctx, AV_LOG_ERROR, "Invalid slice count: %d.\n", slice_count);
+            return AVERROR_INVALIDDATA;
+        }
+
         slices_hdr = buf + 4;
         buf += 8 * slice_count;
         buf_size -= 8 * slice_count;
-        if (buf_size <= 0)
-            return AVERROR_INVALIDDATA;
     }else
         slice_count = avctx->slice_count;
 
@@ -693,18 +697,21 @@ static int rv10_decode_frame(AVCodecContext *avctx,
     }
 
     if(s->current_picture_ptr != NULL && s->mb_y>=s->mb_height){
-        ff_er_frame_end(s);
+        ff_er_frame_end(&s->er);
         ff_MPV_frame_end(s);
 
         if (s->pict_type == AV_PICTURE_TYPE_B || s->low_delay) {
-            *pict = s->current_picture_ptr->f;
+            if ((ret = av_frame_ref(pict, &s->current_picture_ptr->f)) < 0)
+                return ret;
+            ff_print_debug_info(s, s->current_picture_ptr);
         } else if (s->last_picture_ptr != NULL) {
-            *pict = s->last_picture_ptr->f;
+            if ((ret = av_frame_ref(pict, &s->last_picture_ptr->f)) < 0)
+                return ret;
+            ff_print_debug_info(s, s->last_picture_ptr);
         }
 
         if(s->last_picture_ptr || s->low_delay){
             *got_frame = 1;
-            ff_print_debug_info(s, pict);
         }
         s->current_picture_ptr= NULL; // so we can detect if frame_end was not called (find some nicer solution...)
     }

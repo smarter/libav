@@ -1,6 +1,11 @@
 Entries are sorted chronologically from oldest to youngest within each release,
 releases are sorted from youngest to oldest.
 
+version 10:
+- av_strnstr
+- support ID3v2 tags in ASF files
+
+
 version 9:
 - av_basename and av_dirname
 - adobe and limelight publisher authentication in RTMP

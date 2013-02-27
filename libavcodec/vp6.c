@@ -55,10 +55,10 @@ static int vp6_parse_header(VP56Context *s, const uint8_t *buf, int buf_size,
     int res = 0;
     int separated_coeff = buf[0] & 1;
 
-    s->framep[VP56_FRAME_CURRENT]->key_frame = !(buf[0] & 0x80);
+    s->frames[VP56_FRAME_CURRENT]->key_frame = !(buf[0] & 0x80);
     ff_vp56_init_dequant(s, (buf[0] >> 1) & 0x3F);
 
-    if (s->framep[VP56_FRAME_CURRENT]->key_frame) {
+    if (s->frames[VP56_FRAME_CURRENT]->key_frame) {
         sub_version = buf[1] >> 3;
         if (sub_version > 8)
             return AVERROR_INVALIDDATA;
@@ -144,7 +144,7 @@ static int vp6_parse_header(VP56Context *s, const uint8_t *buf, int buf_size,
         buf      += coeff_offset;
         buf_size -= coeff_offset;
         if (buf_size < 0) {
-            if (s->framep[VP56_FRAME_CURRENT]->key_frame)
+            if (s->frames[VP56_FRAME_CURRENT]->key_frame)
                 avcodec_set_dimensions(s->avctx, 0, 0);
             return AVERROR_INVALIDDATA;
         }
@@ -259,7 +259,7 @@ static int vp6_parse_coeff_models(VP56Context *s)
             if (vp56_rac_get_prob(c, vp6_dccv_pct[pt][node])) {
                 def_prob[node] = vp56_rac_gets_nn(c, 7);
                 model->coeff_dccv[pt][node] = def_prob[node];
-            } else if (s->framep[VP56_FRAME_CURRENT]->key_frame) {
+            } else if (s->frames[VP56_FRAME_CURRENT]->key_frame) {
                 model->coeff_dccv[pt][node] = def_prob[node];
             }
 
@@ -282,7 +282,7 @@ static int vp6_parse_coeff_models(VP56Context *s)
                     if (vp56_rac_get_prob(c, vp6_ract_pct[ct][pt][cg][node])) {
                         def_prob[node] = vp56_rac_gets_nn(c, 7);
                         model->coeff_ract[pt][ct][cg][node] = def_prob[node];
-                    } else if (s->framep[VP56_FRAME_CURRENT]->key_frame) {
+                    } else if (s->frames[VP56_FRAME_CURRENT]->key_frame) {
                         model->coeff_ract[pt][ct][cg][node] = def_prob[node];
                     }
 
@@ -536,8 +536,8 @@ static void vp6_filter_diag2(VP56Context *s, uint8_t *dst, uint8_t *src,
                              int stride, int h_weight, int v_weight)
 {
     uint8_t *tmp = s->edge_emu_buffer+16;
-    s->dsp.put_h264_chroma_pixels_tab[0](tmp, src, stride, 9, h_weight, 0);
-    s->dsp.put_h264_chroma_pixels_tab[0](dst, tmp, stride, 8, 0, v_weight);
+    s->h264chroma.put_h264_chroma_pixels_tab[0](tmp, src, stride, 9, h_weight, 0);
+    s->h264chroma.put_h264_chroma_pixels_tab[0](dst, tmp, stride, 8, 0, v_weight);
 }
 
 static void vp6_filter(VP56Context *s, uint8_t *dst, uint8_t *src,
@@ -583,7 +583,7 @@ static void vp6_filter(VP56Context *s, uint8_t *dst, uint8_t *src,
         }
     } else {
         if (!x8 || !y8) {
-            s->dsp.put_h264_chroma_pixels_tab[0](dst, src+offset1, stride, 8, x8, y8);
+            s->h264chroma.put_h264_chroma_pixels_tab[0](dst, src + offset1, stride, 8, x8, y8);
         } else {
             vp6_filter_diag2(s, dst, src+offset1 + ((mv.x^mv.y)>>31), stride, x8, y8);
         }
@@ -593,9 +593,12 @@ static void vp6_filter(VP56Context *s, uint8_t *dst, uint8_t *src,
 static av_cold int vp6_decode_init(AVCodecContext *avctx)
 {
     VP56Context *s = avctx->priv_data;
+    int ret;
 
-    ff_vp56_init(avctx, avctx->codec->id == AV_CODEC_ID_VP6,
-                        avctx->codec->id == AV_CODEC_ID_VP6A);
+    if ((ret = ff_vp56_init(avctx, avctx->codec->id == AV_CODEC_ID_VP6,
+                            avctx->codec->id == AV_CODEC_ID_VP6A)) < 0)
+        return ret;
+
     s->vp56_coord_div = vp6_coord_div;
     s->parse_vector_adjustment = vp6_parse_vector_adjustment;
     s->filter = vp6_filter;

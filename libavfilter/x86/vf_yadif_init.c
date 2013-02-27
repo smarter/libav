@@ -27,14 +27,14 @@
 #include "libavcodec/x86/dsputil_mmx.h"
 #include "libavfilter/yadif.h"
 
-void ff_yadif_filter_line_mmxext(uint8_t *dst, uint8_t *prev, uint8_t *cur,
-                                 uint8_t *next, int w, int prefs,
+void ff_yadif_filter_line_mmxext(void *dst, void *prev, void *cur,
+                                 void *next, int w, int prefs,
                                  int mrefs, int parity, int mode);
-void ff_yadif_filter_line_sse2(uint8_t *dst, uint8_t *prev, uint8_t *cur,
-                               uint8_t *next, int w, int prefs,
+void ff_yadif_filter_line_sse2(void *dst, void *prev, void *cur,
+                               void *next, int w, int prefs,
                                int mrefs, int parity, int mode);
-void ff_yadif_filter_line_ssse3(uint8_t *dst, uint8_t *prev, uint8_t *cur,
-                                uint8_t *next, int w, int prefs,
+void ff_yadif_filter_line_ssse3(void *dst, void *prev, void *cur,
+                                void *next, int w, int prefs,
                                 int mrefs, int parity, int mode);
 
 av_cold void ff_yadif_init_x86(YADIFContext *yadif)
@@ -43,12 +43,18 @@ av_cold void ff_yadif_init_x86(YADIFContext *yadif)
 
 #if HAVE_YASM
 #if ARCH_X86_32
-    if (EXTERNAL_MMXEXT(cpu_flags))
+    if (EXTERNAL_MMXEXT(cpu_flags)) {
         yadif->filter_line = ff_yadif_filter_line_mmxext;
+        yadif->req_align   = 8;
+    }
 #endif /* ARCH_X86_32 */
-    if (EXTERNAL_SSE2(cpu_flags))
+    if (EXTERNAL_SSE2(cpu_flags)) {
         yadif->filter_line = ff_yadif_filter_line_sse2;
-    if (EXTERNAL_SSSE3(cpu_flags))
+        yadif->req_align   = 16;
+    }
+    if (EXTERNAL_SSSE3(cpu_flags)) {
         yadif->filter_line = ff_yadif_filter_line_ssse3;
+        yadif->req_align   = 16;
+    }
 #endif /* HAVE_YASM */
 }

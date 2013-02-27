@@ -82,7 +82,6 @@ int ff_wma_init(AVCodecContext *avctx, int flags2)
         || avctx->bit_rate    <= 0)
         return -1;
 
-    ff_dsputil_init(&s->dsp, avctx);
     ff_fmt_convert_init(&s->fmt_conv, avctx);
     avpriv_float_dsp_init(&s->fdsp, avctx->flags & CODEC_FLAG_BITEXACT);
 
@@ -386,6 +385,11 @@ int ff_wma_end(AVCodecContext *avctx)
         av_free(s->level_table[i]);
         av_free(s->int_table[i]);
     }
+
+#if FF_API_OLD_ENCODE_AUDIO
+    if (av_codec_is_encoder(avctx->codec))
+        av_freep(&avctx->coded_frame);
+#endif
 
     return 0;
 }

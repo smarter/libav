@@ -1,6 +1,4 @@
 /*
- * Copyright (c) 2008 Siarhei Siamashka <ssvb@users.sourceforge.net>
- *
  * This file is part of Libav.
  *
  * Libav is free software; you can redistribute it and/or
@@ -18,13 +16,14 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#include "libavcodec/dsputil.h"
-#include "dsputil_arm.h"
 
-void ff_vector_fmul_reverse_vfp(float *dst, const float *src0,
-                                const float *src1, int len);
+#ifndef AVCODEC_BFIN_VP3_BFIN_H
+#define AVCODEC_BFIN_VP3_BFIN_H
 
-void ff_dsputil_init_vfp(DSPContext* c, AVCodecContext *avctx)
-{
-    c->vector_fmul_reverse = ff_vector_fmul_reverse_vfp;
-}
+#include <stdint.h>
+
+void ff_bfin_vp3_idct(int16_t *block);
+void ff_bfin_vp3_idct_put(uint8_t *dest, int line_size, int16_t *block);
+void ff_bfin_vp3_idct_add(uint8_t *dest, int line_size, int16_t *block);
+
+#endif /* AVCODEC_BFIN_VP3_BFIN_H */

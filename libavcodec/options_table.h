@@ -208,8 +208,10 @@ static const AVOption options[]={
 {"simplearmv6", NULL, 0, AV_OPT_TYPE_CONST, {.i64 = FF_IDCT_SIMPLEARMV6 }, INT_MIN, INT_MAX, V|E|D, "idct"},
 {"simpleneon", NULL, 0, AV_OPT_TYPE_CONST, {.i64 = FF_IDCT_SIMPLENEON }, INT_MIN, INT_MAX, V|E|D, "idct"},
 {"simplealpha", NULL, 0, AV_OPT_TYPE_CONST, {.i64 = FF_IDCT_SIMPLEALPHA }, INT_MIN, INT_MAX, V|E|D, "idct"},
+#if FF_API_IDCT
 {"h264", NULL, 0, AV_OPT_TYPE_CONST, {.i64 = FF_IDCT_H264 }, INT_MIN, INT_MAX, V|E|D, "idct"},
 {"vp3", NULL, 0, AV_OPT_TYPE_CONST, {.i64 = FF_IDCT_VP3 }, INT_MIN, INT_MAX, V|E|D, "idct"},
+#endif
 {"ipp", NULL, 0, AV_OPT_TYPE_CONST, {.i64 = FF_IDCT_IPP }, INT_MIN, INT_MAX, V|E|D, "idct"},
 {"xvidmmx", NULL, 0, AV_OPT_TYPE_CONST, {.i64 = FF_IDCT_XVIDMMX }, INT_MIN, INT_MAX, V|E|D, "idct"},
 {"faani", "floating point AAN IDCT", 0, AV_OPT_TYPE_CONST, {.i64 = FF_IDCT_FAAN }, INT_MIN, INT_MAX, V|D|E, "idct"},
@@ -401,6 +403,7 @@ static const AVOption options[]={
 {"s32p", "32-bit signed integer planar",  0, AV_OPT_TYPE_CONST, {.i64 = AV_SAMPLE_FMT_S32P }, INT_MIN, INT_MAX, A|D, "request_sample_fmt"},
 {"fltp", "32-bit float planar",           0, AV_OPT_TYPE_CONST, {.i64 = AV_SAMPLE_FMT_FLTP }, INT_MIN, INT_MAX, A|D, "request_sample_fmt"},
 {"dblp", "64-bit double planar",          0, AV_OPT_TYPE_CONST, {.i64 = AV_SAMPLE_FMT_DBLP }, INT_MIN, INT_MAX, A|D, "request_sample_fmt"},
+{"refcounted_frames", NULL, OFFSET(refcounted_frames), AV_OPT_TYPE_INT, {.i64 = 0}, 0, 1, A|V|D },
 {NULL},
 };
 

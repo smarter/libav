@@ -26,6 +26,7 @@
 #include "bytestream.h"
 #define BITSTREAM_READER_LE
 #include "get_bits.h"
+#include "internal.h"
 
 typedef struct XanContext {
     AVCodecContext *avctx;
@@ -44,6 +45,11 @@ static av_cold int xan_decode_init(AVCodecContext *avctx)
     s->avctx = avctx;
 
     avctx->pix_fmt = AV_PIX_FMT_YUV420P;
+
+    if (avctx->height < 8) {
+        av_log(avctx, AV_LOG_ERROR, "Invalid frame height: %d.\n", avctx->height);
+        return AVERROR(EINVAL);
+    }
 
     s->buffer_size = avctx->width * avctx->height;
     s->y_buffer = av_malloc(s->buffer_size);
@@ -210,6 +216,10 @@ static int xan_decode_chroma(AVCodecContext *avctx, unsigned chroma_off)
             U += s->pic.linesize[1];
             V += s->pic.linesize[2];
         }
+        if (avctx->height & 1) {
+            memcpy(U, U - s->pic.linesize[1], avctx->width >> 1);
+            memcpy(V, V - s->pic.linesize[2], avctx->width >> 1);
+        }
     } else {
         uint8_t *U2 = U + s->pic.linesize[1];
         uint8_t *V2 = V + s->pic.linesize[2];
@@ -229,6 +239,12 @@ static int xan_decode_chroma(AVCodecContext *avctx, unsigned chroma_off)
             V  += s->pic.linesize[2] * 2;
             U2 += s->pic.linesize[1] * 2;
             V2 += s->pic.linesize[2] * 2;
+        }
+        if (avctx->height & 3) {
+            int lines = ((avctx->height + 1) >> 1) - (avctx->height >> 2) * 2;
+
+            memcpy(U, U - lines * s->pic.linesize[1], lines * s->pic.linesize[1]);
+            memcpy(V, V - lines * s->pic.linesize[2], lines * s->pic.linesize[2]);
         }
     }
 
@@ -364,11 +380,7 @@ static int xan_decode_frame(AVCodecContext *avctx,
     int ftype;
     int ret;
 
-    s->pic.reference = 1;
-    s->pic.buffer_hints = FF_BUFFER_HINTS_VALID |
-                          FF_BUFFER_HINTS_PRESERVE |
-                          FF_BUFFER_HINTS_REUSABLE;
-    if ((ret = avctx->reget_buffer(avctx, &s->pic))) {
+    if ((ret = ff_reget_buffer(avctx, &s->pic))) {
         av_log(s->avctx, AV_LOG_ERROR, "reget_buffer() failed\n");
         return ret;
     }
@@ -389,8 +401,10 @@ static int xan_decode_frame(AVCodecContext *avctx,
     if (ret)
         return ret;
 
+    if ((ret = av_frame_ref(data, &s->pic)) < 0)
+        return ret;
+
     *got_frame = 1;
-    *(AVFrame*)data = s->pic;
 
     return avpkt->size;
 }
@@ -398,9 +412,6 @@ static int xan_decode_frame(AVCodecContext *avctx,
 static av_cold int xan_decode_end(AVCodecContext *avctx)
 {
     XanContext *s = avctx->priv_data;
-
-    if (s->pic.data[0])
-        avctx->release_buffer(avctx, &s->pic);
 
     av_freep(&s->y_buffer);
     av_freep(&s->scratch_buffer);

@@ -29,12 +29,12 @@
 #include "libavutil/float_dsp.h"
 #include "avcodec.h"
 #include "get_bits.h"
-#include "dsputil.h"
 #include "fft.h"
 #include "fmtconvert.h"
 #include "internal.h"
 
 #include "vorbis.h"
+#include "vorbisdsp.h"
 #include "xiph.h"
 
 #define V_NB_BITS 8
@@ -123,9 +123,8 @@ typedef struct {
 
 typedef struct vorbis_context_s {
     AVCodecContext *avccontext;
-    AVFrame frame;
     GetBitContext gb;
-    DSPContext dsp;
+    VorbisDSPContext dsp;
     AVFloatDSPContext fdsp;
     FmtConvertContext fmt_conv;
 
@@ -981,7 +980,7 @@ static av_cold int vorbis_decode_init(AVCodecContext *avccontext)
     int hdr_type, ret;
 
     vc->avccontext = avccontext;
-    ff_dsputil_init(&vc->dsp, avccontext);
+    ff_vorbisdsp_init(&vc->dsp);
     avpriv_float_dsp_init(&vc->fdsp, avccontext->flags & CODEC_FLAG_BITEXACT);
     ff_fmt_convert_init(&vc->fmt_conv, avccontext);
 
@@ -1029,9 +1028,6 @@ static av_cold int vorbis_decode_init(AVCodecContext *avccontext)
 
     avccontext->channels    = vc->audio_channels;
     avccontext->sample_rate = vc->audio_samplerate;
-
-    avcodec_get_frame_defaults(&vc->frame);
-    avccontext->coded_frame = &vc->frame;
 
     return 0;
 }
@@ -1450,7 +1446,7 @@ static inline int vorbis_residue_decode(vorbis_context *vc, vorbis_residue *vr,
     }
 }
 
-void ff_vorbis_inverse_coupling(float *mag, float *ang, int blocksize)
+void ff_vorbis_inverse_coupling(float *mag, float *ang, intptr_t blocksize)
 {
     int i;
     for (i = 0;  i < blocksize;  i++) {
@@ -1643,6 +1639,7 @@ static int vorbis_decode_frame(AVCodecContext *avccontext, void *data,
     const uint8_t *buf = avpkt->data;
     int buf_size       = avpkt->size;
     vorbis_context *vc = avccontext->priv_data;
+    AVFrame *frame     = data;
     GetBitContext *gb = &vc->gb;
     float *channel_ptrs[255];
     int i, len, ret;
@@ -1650,19 +1647,19 @@ static int vorbis_decode_frame(AVCodecContext *avccontext, void *data,
     av_dlog(NULL, "packet length %d \n", buf_size);
 
     /* get output buffer */
-    vc->frame.nb_samples = vc->blocksize[1] / 2;
-    if ((ret = ff_get_buffer(avccontext, &vc->frame)) < 0) {
+    frame->nb_samples = vc->blocksize[1] / 2;
+    if ((ret = ff_get_buffer(avccontext, frame, 0)) < 0) {
         av_log(avccontext, AV_LOG_ERROR, "get_buffer() failed\n");
         return ret;
     }
 
     if (vc->audio_channels > 8) {
         for (i = 0; i < vc->audio_channels; i++)
-            channel_ptrs[i] = (float *)vc->frame.extended_data[i];
+            channel_ptrs[i] = (float *)frame->extended_data[i];
     } else {
         for (i = 0; i < vc->audio_channels; i++) {
             int ch = ff_vorbis_channel_layout_offsets[vc->audio_channels - 1][i];
-            channel_ptrs[ch] = (float *)vc->frame.extended_data[i];
+            channel_ptrs[ch] = (float *)frame->extended_data[i];
         }
     }
 
@@ -1680,9 +1677,8 @@ static int vorbis_decode_frame(AVCodecContext *avccontext, void *data,
     av_dlog(NULL, "parsed %d bytes %d bits, returned %d samples (*ch*bits) \n",
             get_bits_count(gb) / 8, get_bits_count(gb) % 8, len);
 
-    vc->frame.nb_samples = len;
-    *got_frame_ptr   = 1;
-    *(AVFrame *)data = vc->frame;
+    frame->nb_samples = len;
+    *got_frame_ptr    = 1;
 
     return buf_size;
 }

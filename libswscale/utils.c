@@ -163,11 +163,11 @@ static const FormatEntry format_entries[AV_PIX_FMT_NB] = {
     [AV_PIX_FMT_YUV444P9LE]  = { 1, 1 },
     [AV_PIX_FMT_YUV444P10BE] = { 1, 1 },
     [AV_PIX_FMT_YUV444P10LE] = { 1, 1 },
-    [AV_PIX_FMT_GBRP]        = { 1, 0 },
-    [AV_PIX_FMT_GBRP9LE]     = { 1, 0 },
-    [AV_PIX_FMT_GBRP9BE]     = { 1, 0 },
-    [AV_PIX_FMT_GBRP10LE]    = { 1, 0 },
-    [AV_PIX_FMT_GBRP10BE]    = { 1, 0 },
+    [AV_PIX_FMT_GBRP]        = { 1, 1 },
+    [AV_PIX_FMT_GBRP9LE]     = { 1, 1 },
+    [AV_PIX_FMT_GBRP9BE]     = { 1, 1 },
+    [AV_PIX_FMT_GBRP10LE]    = { 1, 1 },
+    [AV_PIX_FMT_GBRP10BE]    = { 1, 1 },
     [AV_PIX_FMT_GBRP16LE]    = { 1, 0 },
     [AV_PIX_FMT_GBRP16BE]    = { 1, 0 },
 };
@@ -938,10 +938,21 @@ av_cold int sws_init_context(SwsContext *c, SwsFilter *srcFilter,
     getSubSampleFactors(&c->chrSrcHSubSample, &c->chrSrcVSubSample, srcFormat);
     getSubSampleFactors(&c->chrDstHSubSample, &c->chrDstVSubSample, dstFormat);
 
+    if (isPlanarRGB(dstFormat)) {
+        if (!(flags & SWS_FULL_CHR_H_INT)) {
+            av_log(c, AV_LOG_DEBUG,
+                   "%s output is not supported with half chroma resolution, switching to full\n",
+                   av_get_pix_fmt_name(dstFormat));
+            flags   |= SWS_FULL_CHR_H_INT;
+            c->flags = flags;
+        }
+    }
+
     /* reuse chroma for 2 pixels RGB/BGR unless user wants full
      * chroma interpolation */
     if (flags & SWS_FULL_CHR_H_INT &&
         isAnyRGB(dstFormat)        &&
+        !isPlanarRGB(dstFormat)    &&
         dstFormat != AV_PIX_FMT_RGBA  &&
         dstFormat != AV_PIX_FMT_ARGB  &&
         dstFormat != AV_PIX_FMT_BGRA  &&
@@ -968,6 +979,9 @@ av_cold int sws_init_context(SwsContext *c, SwsFilter *srcFilter,
         srcFormat != AV_PIX_FMT_RGB8 && srcFormat != AV_PIX_FMT_BGR8 &&
         srcFormat != AV_PIX_FMT_RGB4 && srcFormat != AV_PIX_FMT_BGR4 &&
         srcFormat != AV_PIX_FMT_RGB4_BYTE && srcFormat != AV_PIX_FMT_BGR4_BYTE &&
+        srcFormat != AV_PIX_FMT_GBRP9BE   && srcFormat != AV_PIX_FMT_GBRP9LE  &&
+        srcFormat != AV_PIX_FMT_GBRP10BE  && srcFormat != AV_PIX_FMT_GBRP10LE &&
+        srcFormat != AV_PIX_FMT_GBRP16BE  && srcFormat != AV_PIX_FMT_GBRP16LE &&
         ((dstW >> c->chrDstHSubSample) <= (srcW >> 1) ||
          (flags & SWS_FAST_BILINEAR)))
         c->chrSrcHSubSample = 1;

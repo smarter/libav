@@ -128,6 +128,8 @@ Component options:
   --disable-mdct           disable MDCT code
   --disable-rdft           disable RDFT code
   --disable-fft            disable FFT code
+
+Hardware accelerators:
   --enable-dxva2           enable DXVA2 code
   --enable-vaapi           enable VAAPI code
   --enable-vda             enable VDA code
@@ -997,6 +999,12 @@ COMPONENT_LIST="
     protocols
 "
 
+HWACCEL_LIST="
+    dxva2
+    vaapi
+    vda
+    vdpau
+"
 LIBRARY_LIST="
     avcodec
     avdevice
@@ -1016,13 +1024,13 @@ PROGRAM_LIST="
 
 CONFIG_LIST="
     $COMPONENT_LIST
+    $HWACCEL_LIST
     $LIBRARY_LIST
     $PROGRAM_LIST
     avisynth
     bzlib
     dct
     doc
-    dxva2
     fft
     frei0r
     gnutls
@@ -1071,9 +1079,6 @@ CONFIG_LIST="
     static
     swscale_alpha
     thumb
-    vaapi
-    vda
-    vdpau
     version3
     xmm_clobber_test
     x11grab
@@ -1235,6 +1240,7 @@ HAVE_LIST="
     getservbyport
     gettimeofday
     gnu_as
+    gsm_h
     ibm_asm
     inet_aton
     io_h
@@ -1634,7 +1640,7 @@ wmv3_vdpau_decoder_select="vc1_vdpau_decoder"
 wmv3_vdpau_hwaccel_select="vc1_vdpau_hwaccel"
 
 # parsers
-h264_parser_select="error_resilience golomb h264dsp h264pred mpegvideo"
+h264_parser_select="error_resilience golomb h264chroma h264dsp h264pred h264qpel mpegvideo"
 mpeg4video_parser_select="error_resilience mpegvideo"
 mpegvideo_parser_select="error_resilience mpegvideo"
 vc1_parser_select="error_resilience mpegvideo"
@@ -2854,15 +2860,9 @@ case $target_os in
         oss_outdev_extralibs="-lossaudio"
         ;;
     openbsd|bitrig)
-        # On OpenBSD 4.5. the compiler does not use PIC unless
-        # explicitly using -fPIC. Libav builds fine without PIC,
-        # however the generated executable will not do anything
-        # (simply quits with exit-code 1, no crash, no output).
-        # Thus explicitly enable PIC here.
-        enable pic
         disable symver
         SHFLAGS='-shared'
-        SLIBNAME_WITH_MAJOR='$(SLIBNAME).$(LIBVERSION)'
+        SLIB_INSTALL_NAME='$(SLIBNAME).$(LIBMAJOR).$(LIBMINOR)'
         SLIB_INSTALL_LINKS=
         oss_indev_extralibs="-lossaudio"
         oss_outdev_extralibs="-lossaudio"
@@ -2917,7 +2917,6 @@ case $target_os in
         dlltool="${cross_prefix}dlltool"
         ranlib=:
         enable dos_paths
-        add_cppflags -U__STRICT_ANSI__
         ;;
     win32|win64)
         if enabled shared; then
@@ -3042,20 +3041,23 @@ esac
 
 # determine libc flavour
 
+# uclibc defines __GLIBC__, so it needs to be checked before glibc.
 if check_cpp_condition features.h "defined __UCLIBC__"; then
     libc_type=uclibc
     add_cppflags -D_POSIX_C_SOURCE=200112 -D_XOPEN_SOURCE=600
 elif check_cpp_condition features.h "defined __GLIBC__"; then
     libc_type=glibc
     add_cppflags -D_POSIX_C_SOURCE=200112 -D_XOPEN_SOURCE=600
+# MinGW headers can be installed on Cygwin, so check for newlib first.
+elif check_cpp_condition newlib.h "defined _NEWLIB_VERSION"; then
+    libc_type=newlib
+    add_cppflags -U__STRICT_ANSI__
 elif check_header _mingw.h; then
     libc_type=mingw
     check_cpp_condition _mingw.h \
         "defined (__MINGW64_VERSION_MAJOR) || (__MINGW32_MAJOR_VERSION > 3) || \
             (__MINGW32_MAJOR_VERSION == 3 && __MINGW32_MINOR_VERSION >= 15)" ||
         die "ERROR: MinGW runtime version must be >= 3.15."
-elif check_cpp_condition newlib.h "defined _NEWLIB_VERSION"; then
-    libc_type=newlib
     add_cppflags -U__STRICT_ANSI__
 elif check_func_headers stdlib.h _get_doserrno; then
     libc_type=msvcrt
@@ -3479,7 +3481,9 @@ enabled gnutls     && require_pkg_config gnutls gnutls/gnutls.h gnutls_global_in
 enabled libfaac    && require2 libfaac "stdint.h faac.h" faacEncGetVersion -lfaac
 enabled libfdk_aac && require  libfdk_aac fdk-aac/aacenc_lib.h aacEncOpen -lfdk-aac
 enabled libfreetype && require_pkg_config freetype2 "ft2build.h freetype/freetype.h" FT_Init_FreeType
-enabled libgsm     && require  libgsm gsm/gsm.h gsm_create -lgsm
+enabled libgsm     && { for gsm_hdr in "gsm.h" "gsm/gsm.h"; do
+                            check_lib "${gsm_hdr}" gsm_create -lgsm && break;
+                        done || die "ERROR: libgsm not found"; }
 enabled libilbc    && require  libilbc ilbc.h WebRtcIlbcfix_InitDecode -lilbc
 enabled libmp3lame && require  "libmp3lame >= 3.98.3" lame/lame.h lame_set_VBR_quality -lmp3lame
 enabled libopencore_amrnb  && require libopencore_amrnb opencore-amrnb/interf_dec.h Decoder_Interface_init -lopencore-amrnb
@@ -3959,6 +3963,7 @@ get_version(){
     eval ${name}_VERSION=\$${name}_VERSION_MAJOR.\$${name}_VERSION_MINOR.\$${name}_VERSION_MICRO
     eval echo "${lcname}_VERSION=\$${name}_VERSION" >> config.mak
     eval echo "${lcname}_VERSION_MAJOR=\$${name}_VERSION_MAJOR" >> config.mak
+    eval echo "${lcname}_VERSION_MINOR=\$${name}_VERSION_MINOR" >> config.mak
 }
 
 map 'get_version $v' $LIBRARY_LIST

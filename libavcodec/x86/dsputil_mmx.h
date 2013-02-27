@@ -31,8 +31,6 @@ typedef struct xmm_reg { uint64_t a, b; } xmm_reg;
 extern const uint64_t ff_bone;
 extern const uint64_t ff_wtwo;
 
-extern const uint64_t ff_pdw_80000000[2];
-
 extern const xmm_reg  ff_pw_3;
 extern const xmm_reg  ff_pw_4;
 extern const xmm_reg  ff_pw_5;
@@ -85,9 +83,9 @@ extern const double ff_pd_2[2];
 void ff_dsputilenc_init_mmx(DSPContext* c, AVCodecContext *avctx);
 void ff_dsputil_init_pix_mmx(DSPContext* c, AVCodecContext *avctx);
 
-void ff_add_pixels_clamped_mmx(const DCTELEM *block, uint8_t *pixels, int line_size);
-void ff_put_pixels_clamped_mmx(const DCTELEM *block, uint8_t *pixels, int line_size);
-void ff_put_signed_pixels_clamped_mmx(const DCTELEM *block, uint8_t *pixels, int line_size);
+void ff_add_pixels_clamped_mmx(const int16_t *block, uint8_t *pixels, int line_size);
+void ff_put_pixels_clamped_mmx(const int16_t *block, uint8_t *pixels, int line_size);
+void ff_put_signed_pixels_clamped_mmx(const int16_t *block, uint8_t *pixels, int line_size);
 
 void ff_put_cavs_qpel8_mc00_mmxext(uint8_t *dst, uint8_t *src, int stride);
 void ff_avg_cavs_qpel8_mc00_mmxext(uint8_t *dst, uint8_t *src, int stride);
