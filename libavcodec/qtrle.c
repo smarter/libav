@@ -37,7 +37,6 @@
 
 #include "avcodec.h"
 #include "bytestream.h"
-#include "internal.h"
 
 typedef struct QtrleContext {
     AVCodecContext *avctx;
@@ -393,7 +392,10 @@ static int qtrle_decode_frame(AVCodecContext *avctx,
     int ret;
 
     bytestream2_init(&s->g, avpkt->data, avpkt->size);
-    if ((ret = ff_reget_buffer(avctx, &s->frame)) < 0) {
+    s->frame.reference = 1;
+    s->frame.buffer_hints = FF_BUFFER_HINTS_VALID | FF_BUFFER_HINTS_PRESERVE |
+                            FF_BUFFER_HINTS_REUSABLE | FF_BUFFER_HINTS_READABLE;
+    if ((ret = avctx->reget_buffer(avctx, &s->frame)) < 0) {
         av_log (s->avctx, AV_LOG_ERROR, "reget_buffer() failed\n");
         return ret;
     }
@@ -477,9 +479,8 @@ static int qtrle_decode_frame(AVCodecContext *avctx,
     }
 
 done:
-    if ((ret = av_frame_ref(data, &s->frame)) < 0)
-        return ret;
     *got_frame      = 1;
+    *(AVFrame*)data = s->frame;
 
     /* always report that the buffer was completely consumed */
     return avpkt->size;
@@ -489,7 +490,8 @@ static av_cold int qtrle_decode_end(AVCodecContext *avctx)
 {
     QtrleContext *s = avctx->priv_data;
 
-    av_frame_unref(&s->frame);
+    if (s->frame.data[0])
+        avctx->release_buffer(avctx, &s->frame);
 
     return 0;
 }

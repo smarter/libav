@@ -257,11 +257,11 @@ fail:
     return ret;
 }
 
-static int filter_frame(AVFilterLink *link, AVFrame *in)
+static int filter_frame(AVFilterLink *link, AVFilterBufferRef *in)
 {
     ScaleContext *scale = link->dst->priv;
     AVFilterLink *outlink = link->dst->outputs[0];
-    AVFrame *out;
+    AVFilterBufferRef *out;
     const AVPixFmtDescriptor *desc = av_pix_fmt_desc_get(link->format);
 
     if (!scale->sws)
@@ -270,25 +270,25 @@ static int filter_frame(AVFilterLink *link, AVFrame *in)
     scale->hsub = desc->log2_chroma_w;
     scale->vsub = desc->log2_chroma_h;
 
-    out = ff_get_video_buffer(outlink, outlink->w, outlink->h);
+    out = ff_get_video_buffer(outlink, AV_PERM_WRITE, outlink->w, outlink->h);
     if (!out) {
-        av_frame_free(&in);
+        avfilter_unref_bufferp(&in);
         return AVERROR(ENOMEM);
     }
 
-    av_frame_copy_props(out, in);
-    out->width  = outlink->w;
-    out->height = outlink->h;
+    avfilter_copy_buffer_ref_props(out, in);
+    out->video->w = outlink->w;
+    out->video->h = outlink->h;
 
-    av_reduce(&out->sample_aspect_ratio.num, &out->sample_aspect_ratio.den,
-              (int64_t)in->sample_aspect_ratio.num * outlink->h * link->w,
-              (int64_t)in->sample_aspect_ratio.den * outlink->w * link->h,
+    av_reduce(&out->video->pixel_aspect.num, &out->video->pixel_aspect.den,
+              (int64_t)in->video->pixel_aspect.num * outlink->h * link->w,
+              (int64_t)in->video->pixel_aspect.den * outlink->w * link->h,
               INT_MAX);
 
-    sws_scale(scale->sws, in->data, in->linesize, 0, in->height,
+    sws_scale(scale->sws, in->data, in->linesize, 0, in->video->h,
               out->data, out->linesize);
 
-    av_frame_free(&in);
+    avfilter_unref_bufferp(&in);
     return ff_filter_frame(outlink, out);
 }
 
@@ -297,6 +297,7 @@ static const AVFilterPad avfilter_vf_scale_inputs[] = {
         .name        = "default",
         .type        = AVMEDIA_TYPE_VIDEO,
         .filter_frame = filter_frame,
+        .min_perms   = AV_PERM_READ,
     },
     { NULL }
 };

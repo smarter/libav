@@ -182,26 +182,26 @@ static int config_input(AVFilterLink *inlink)
     return 0;
 }
 
-static int filter_frame(AVFilterLink *inlink, AVFrame *in)
+static int filter_frame(AVFilterLink *inlink, AVFilterBufferRef *in)
 {
     GradFunContext *gf = inlink->dst->priv;
     AVFilterLink *outlink = inlink->dst->outputs[0];
-    AVFrame *out;
+    AVFilterBufferRef *out;
     int p, direct;
 
-    if (av_frame_is_writable(in)) {
+    if ((in->perms & AV_PERM_WRITE) && !(in->perms & AV_PERM_PRESERVE)) {
         direct = 1;
         out = in;
     } else {
-        out = ff_get_video_buffer(outlink, outlink->w, outlink->h);
+        out = ff_get_video_buffer(outlink, AV_PERM_WRITE, outlink->w, outlink->h);
         if (!out) {
-            av_frame_free(&in);
+            avfilter_unref_bufferp(&in);
             return AVERROR(ENOMEM);
         }
 
-        av_frame_copy_props(out, in);
-        out->width  = outlink->w;
-        out->height = outlink->h;
+        avfilter_copy_buffer_ref_props(out, in);
+        out->video->w = outlink->w;
+        out->video->h = outlink->h;
     }
 
     for (p = 0; p < 4 && in->data[p]; p++) {
@@ -221,7 +221,7 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in)
     }
 
     if (!direct)
-        av_frame_free(&in);
+        avfilter_unref_bufferp(&in);
 
     return ff_filter_frame(outlink, out);
 }
@@ -232,6 +232,7 @@ static const AVFilterPad avfilter_vf_gradfun_inputs[] = {
         .type         = AVMEDIA_TYPE_VIDEO,
         .config_props = config_input,
         .filter_frame = filter_frame,
+        .min_perms    = AV_PERM_READ,
     },
     { NULL }
 };

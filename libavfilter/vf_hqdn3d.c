@@ -322,39 +322,39 @@ static int config_input(AVFilterLink *inlink)
     return 0;
 }
 
-static int filter_frame(AVFilterLink *inlink, AVFrame *in)
+static int filter_frame(AVFilterLink *inlink, AVFilterBufferRef *in)
 {
     HQDN3DContext *hqdn3d = inlink->dst->priv;
     AVFilterLink *outlink = inlink->dst->outputs[0];
-    AVFrame *out;
+    AVFilterBufferRef *out;
     int direct, c;
 
-    if (av_frame_is_writable(in)) {
+    if ((in->perms & AV_PERM_WRITE) && !(in->perms & AV_PERM_PRESERVE)) {
         direct = 1;
         out = in;
     } else {
-        out = ff_get_video_buffer(outlink, outlink->w, outlink->h);
+        out = ff_get_video_buffer(outlink, AV_PERM_WRITE, outlink->w, outlink->h);
         if (!out) {
-            av_frame_free(&in);
+            avfilter_unref_bufferp(&in);
             return AVERROR(ENOMEM);
         }
 
-        av_frame_copy_props(out, in);
-        out->width  = outlink->w;
-        out->height = outlink->h;
+        avfilter_copy_buffer_ref_props(out, in);
+        out->video->w = outlink->w;
+        out->video->h = outlink->h;
     }
 
     for (c = 0; c < 3; c++) {
         denoise(hqdn3d, in->data[c], out->data[c],
                 hqdn3d->line, &hqdn3d->frame_prev[c],
-                in->width  >> (!!c * hqdn3d->hsub),
-                in->height >> (!!c * hqdn3d->vsub),
+                in->video->w >> (!!c * hqdn3d->hsub),
+                in->video->h >> (!!c * hqdn3d->vsub),
                 in->linesize[c], out->linesize[c],
                 hqdn3d->coefs[c?2:0], hqdn3d->coefs[c?3:1]);
     }
 
     if (!direct)
-        av_frame_free(&in);
+        avfilter_unref_bufferp(&in);
 
     return ff_filter_frame(outlink, out);
 }

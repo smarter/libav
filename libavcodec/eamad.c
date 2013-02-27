@@ -46,6 +46,7 @@
 typedef struct MadContext {
     AVCodecContext *avctx;
     DSPContext dsp;
+    AVFrame frame;
     AVFrame last_frame;
     GetBitContext gb;
     void *bitstream_buf;
@@ -78,36 +79,34 @@ static inline void comp(unsigned char *dst, int dst_stride,
             dst[j*dst_stride + i] = av_clip_uint8(src[j*src_stride + i] + add);
 }
 
-static inline void comp_block(MadContext *t, AVFrame *frame,
-                              int mb_x, int mb_y,
+static inline void comp_block(MadContext *t, int mb_x, int mb_y,
                               int j, int mv_x, int mv_y, int add)
 {
     if (j < 4) {
-        comp(frame->data[0] + (mb_y*16 + ((j&2)<<2))*frame->linesize[0] + mb_x*16 + ((j&1)<<3),
-             frame->linesize[0],
+        comp(t->frame.data[0] + (mb_y*16 + ((j&2)<<2))*t->frame.linesize[0] + mb_x*16 + ((j&1)<<3),
+             t->frame.linesize[0],
              t->last_frame.data[0] + (mb_y*16 + ((j&2)<<2) + mv_y)*t->last_frame.linesize[0] + mb_x*16 + ((j&1)<<3) + mv_x,
              t->last_frame.linesize[0], add);
     } else if (!(t->avctx->flags & CODEC_FLAG_GRAY)) {
         int index = j - 3;
-        comp(frame->data[index] + (mb_y*8)*frame->linesize[index] + mb_x * 8,
-             frame->linesize[index],
+        comp(t->frame.data[index] + (mb_y*8)*t->frame.linesize[index] + mb_x * 8,
+             t->frame.linesize[index],
              t->last_frame.data[index] + (mb_y * 8 + (mv_y/2))*t->last_frame.linesize[index] + mb_x * 8 + (mv_x/2),
              t->last_frame.linesize[index], add);
     }
 }
 
-static inline void idct_put(MadContext *t, AVFrame *frame, DCTELEM *block,
-                            int mb_x, int mb_y, int j)
+static inline void idct_put(MadContext *t, DCTELEM *block, int mb_x, int mb_y, int j)
 {
     if (j < 4) {
         ff_ea_idct_put_c(
-            frame->data[0] + (mb_y*16 + ((j&2)<<2))*frame->linesize[0] + mb_x*16 + ((j&1)<<3),
-            frame->linesize[0], block);
+            t->frame.data[0] + (mb_y*16 + ((j&2)<<2))*t->frame.linesize[0] + mb_x*16 + ((j&1)<<3),
+            t->frame.linesize[0], block);
     } else if (!(t->avctx->flags & CODEC_FLAG_GRAY)) {
         int index = j - 3;
         ff_ea_idct_put_c(
-            frame->data[index] + (mb_y*8)*frame->linesize[index] + mb_x*8,
-            frame->linesize[index], block);
+            t->frame.data[index] + (mb_y*8)*t->frame.linesize[index] + mb_x*8,
+            t->frame.linesize[index], block);
     }
 }
 
@@ -181,7 +180,7 @@ static int decode_motion(GetBitContext *gb)
     return value;
 }
 
-static void decode_mb(MadContext *s, AVFrame *frame, int inter)
+static void decode_mb(MadContext *s, int inter)
 {
     int mv_map = 0;
     int mv_x, mv_y;
@@ -201,11 +200,11 @@ static void decode_mb(MadContext *s, AVFrame *frame, int inter)
     for (j=0; j<6; j++) {
         if (mv_map & (1<<j)) {  // mv_x and mv_y are guarded by mv_map
             int add = 2*decode_motion(&s->gb);
-            comp_block(s, frame, s->mb_x, s->mb_y, j, mv_x, mv_y, add);
+            comp_block(s, s->mb_x, s->mb_y, j, mv_x, mv_y, add);
         } else {
             s->dsp.clear_block(s->block);
             decode_block_intra(s, s->block);
-            idct_put(s, frame, s->block, s->mb_x, s->mb_y, j);
+            idct_put(s, s->block, s->mb_x, s->mb_y, j);
         }
     }
 }
@@ -227,10 +226,9 @@ static int decode_frame(AVCodecContext *avctx,
     int buf_size       = avpkt->size;
     const uint8_t *buf_end = buf+buf_size;
     MadContext *s     = avctx->priv_data;
-    AVFrame *frame    = data;
     int width, height;
     int chunk_type;
-    int inter, ret;
+    int inter;
 
     if (buf_size < 17) {
         av_log(avctx, AV_LOG_ERROR, "Input buffer too small\n");
@@ -254,12 +252,16 @@ static int decode_frame(AVCodecContext *avctx,
         if (av_image_check_size(width, height, 0, avctx) < 0)
             return -1;
         avcodec_set_dimensions(avctx, width, height);
-        av_frame_unref(&s->last_frame);
+        if (s->frame.data[0])
+            avctx->release_buffer(avctx, &s->frame);
     }
 
-    if ((ret = ff_get_buffer(avctx, frame, AV_GET_BUFFER_FLAG_REF)) < 0) {
-        av_log(avctx, AV_LOG_ERROR, "get_buffer() failed\n");
-        return ret;
+    s->frame.reference = 1;
+    if (!s->frame.data[0]) {
+        if (ff_get_buffer(avctx, &s->frame) < 0) {
+            av_log(avctx, AV_LOG_ERROR, "get_buffer() failed\n");
+            return -1;
+        }
     }
 
     av_fast_padded_malloc(&s->bitstream_buf, &s->bitstream_buf_size,
@@ -271,15 +273,13 @@ static int decode_frame(AVCodecContext *avctx,
 
     for (s->mb_y=0; s->mb_y < (avctx->height+15)/16; s->mb_y++)
         for (s->mb_x=0; s->mb_x < (avctx->width +15)/16; s->mb_x++)
-            decode_mb(s, frame, inter);
+            decode_mb(s, inter);
 
     *got_frame = 1;
+    *(AVFrame*)data = s->frame;
 
-    if (chunk_type != MADe_TAG) {
-        av_frame_unref(&s->last_frame);
-        if ((ret = av_frame_ref(&s->last_frame, frame)) < 0)
-            return ret;
-    }
+    if (chunk_type != MADe_TAG)
+        FFSWAP(AVFrame, s->frame, s->last_frame);
 
     return buf_size;
 }
@@ -287,7 +287,10 @@ static int decode_frame(AVCodecContext *avctx,
 static av_cold int decode_end(AVCodecContext *avctx)
 {
     MadContext *t = avctx->priv_data;
-    av_frame_unref(&t->last_frame);
+    if (t->frame.data[0])
+        avctx->release_buffer(avctx, &t->frame);
+    if (t->last_frame.data[0])
+        avctx->release_buffer(avctx, &t->last_frame);
     av_free(t->bitstream_buf);
     return 0;
 }

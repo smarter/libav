@@ -52,20 +52,21 @@ static int config_props(AVFilterLink *inlink)
     return 0;
 }
 
-static int filter_frame(AVFilterLink *inlink, AVFrame *in)
+static int filter_frame(AVFilterLink *inlink, AVFilterBufferRef *in)
 {
     PixdescTestContext *priv = inlink->dst->priv;
     AVFilterLink *outlink    = inlink->dst->outputs[0];
-    AVFrame *out;
+    AVFilterBufferRef *out;
     int i, c, w = inlink->w, h = inlink->h;
 
-    out = ff_get_video_buffer(outlink, outlink->w, outlink->h);
+    out = ff_get_video_buffer(outlink, AV_PERM_WRITE,
+                              outlink->w, outlink->h);
     if (!out) {
-        av_frame_free(&in);
+        avfilter_unref_bufferp(&in);
         return AVERROR(ENOMEM);
     }
 
-    av_frame_copy_props(out, in);
+    avfilter_copy_buffer_ref_props(out, in);
 
     for (i = 0; i < 4; i++) {
         int h = outlink->h;
@@ -101,7 +102,7 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in)
         }
     }
 
-    av_frame_free(&in);
+    avfilter_unref_bufferp(&in);
     return ff_filter_frame(outlink, out);
 }
 
@@ -111,6 +112,7 @@ static const AVFilterPad avfilter_vf_pixdesctest_inputs[] = {
         .type         = AVMEDIA_TYPE_VIDEO,
         .filter_frame = filter_frame,
         .config_props = config_props,
+        .min_perms    = AV_PERM_READ,
     },
     { NULL }
 };

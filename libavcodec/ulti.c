@@ -30,7 +30,6 @@
 
 #include "avcodec.h"
 #include "bytestream.h"
-#include "internal.h"
 
 #include "ulti_cb.h"
 
@@ -61,7 +60,8 @@ static av_cold int ulti_decode_end(AVCodecContext *avctx){
     UltimotionDecodeContext *s = avctx->priv_data;
     AVFrame *pic = &s->frame;
 
-    av_frame_unref(pic);
+    if (pic->data[0])
+        avctx->release_buffer(avctx, pic);
 
     return 0;
 }
@@ -221,13 +221,15 @@ static int ulti_decode_frame(AVCodecContext *avctx,
     int blocks = 0;
     int done = 0;
     int x = 0, y = 0;
-    int i, ret;
+    int i;
     int skip;
     int tmp;
 
-    if ((ret = ff_reget_buffer(avctx, &s->frame)) < 0) {
+    s->frame.reference = 1;
+    s->frame.buffer_hints = FF_BUFFER_HINTS_VALID | FF_BUFFER_HINTS_PRESERVE | FF_BUFFER_HINTS_REUSABLE;
+    if (avctx->reget_buffer(avctx, &s->frame) < 0) {
         av_log(avctx, AV_LOG_ERROR, "reget_buffer() failed\n");
-        return ret;
+        return -1;
     }
 
     bytestream2_init(&s->gb, buf, buf_size);
@@ -405,8 +407,7 @@ static int ulti_decode_frame(AVCodecContext *avctx,
     }
 
     *got_frame = 1;
-    if ((ret = av_frame_ref(data, &s->frame)) < 0)
-        return ret;
+    *(AVFrame*)data= s->frame;
 
     return buf_size;
 

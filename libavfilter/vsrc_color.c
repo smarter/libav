@@ -146,18 +146,19 @@ static int color_config_props(AVFilterLink *inlink)
 static int color_request_frame(AVFilterLink *link)
 {
     ColorContext *color = link->src->priv;
-    AVFrame *frame = ff_get_video_buffer(link, color->w, color->h);
+    AVFilterBufferRef *picref = ff_get_video_buffer(link, AV_PERM_WRITE, color->w, color->h);
 
-    if (!frame)
+    if (!picref)
         return AVERROR(ENOMEM);
 
-    frame->sample_aspect_ratio = (AVRational) {1, 1};
-    frame->pts                 = color->pts++;
+    picref->video->pixel_aspect = (AVRational) {1, 1};
+    picref->pts                 = color->pts++;
+    picref->pos                 = -1;
 
-    ff_draw_rectangle(frame->data, frame->linesize,
+    ff_draw_rectangle(picref->data, picref->linesize,
                       color->line, color->line_step, color->hsub, color->vsub,
                       0, 0, color->w, color->h);
-    return ff_filter_frame(link, frame);
+    return ff_filter_frame(link, picref);
 }
 
 static const AVFilterPad avfilter_vsrc_color_outputs[] = {

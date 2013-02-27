@@ -21,7 +21,6 @@
 
 #include "avcodec.h"
 #include "bytestream.h"
-#include "internal.h"
 
 typedef struct {
     AVFrame pictures[2];
@@ -56,9 +55,10 @@ static av_cold int decode_end(AVCodecContext *avctx)
 {
     C93DecoderContext * const c93 = avctx->priv_data;
 
-    av_frame_unref(&c93->pictures[0]);
-    av_frame_unref(&c93->pictures[1]);
-
+    if (c93->pictures[0].data[0])
+        avctx->release_buffer(avctx, &c93->pictures[0]);
+    if (c93->pictures[1].data[0])
+        avctx->release_buffer(avctx, &c93->pictures[1]);
     return 0;
 }
 
@@ -120,13 +120,17 @@ static int decode_frame(AVCodecContext *avctx, void *data,
     C93DecoderContext * const c93 = avctx->priv_data;
     AVFrame * const newpic = &c93->pictures[c93->currentpic];
     AVFrame * const oldpic = &c93->pictures[c93->currentpic^1];
+    AVFrame *picture = data;
     GetByteContext gb;
     uint8_t *out;
     int stride, ret, i, x, y, b, bt = 0;
 
     c93->currentpic ^= 1;
 
-    if ((ret = ff_reget_buffer(avctx, newpic)) < 0) {
+    newpic->reference = 1;
+    newpic->buffer_hints = FF_BUFFER_HINTS_VALID | FF_BUFFER_HINTS_PRESERVE |
+                         FF_BUFFER_HINTS_REUSABLE | FF_BUFFER_HINTS_READABLE;
+    if ((ret = avctx->reget_buffer(avctx, newpic)) < 0) {
         av_log(avctx, AV_LOG_ERROR, "reget_buffer() failed\n");
         return ret;
     }
@@ -235,8 +239,7 @@ static int decode_frame(AVCodecContext *avctx, void *data,
             memcpy(newpic->data[1], oldpic->data[1], 256 * 4);
     }
 
-    if ((ret = av_frame_ref(data, newpic)) < 0)
-        return ret;
+    *picture = *newpic;
     *got_frame = 1;
 
     return buf_size;

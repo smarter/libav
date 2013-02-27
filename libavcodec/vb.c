@@ -41,6 +41,7 @@ enum VBFlags {
 
 typedef struct VBDecContext {
     AVCodecContext *avctx;
+    AVFrame pic;
 
     uint8_t *frame, *prev_frame;
     uint32_t pal[AVPALETTE_COUNT];
@@ -188,7 +189,6 @@ static int decode_frame(AVCodecContext *avctx, void *data, int *got_frame,
                         AVPacket *avpkt)
 {
     VBDecContext * const c = avctx->priv_data;
-    AVFrame *frame         = data;
     uint8_t *outptr, *srcptr;
     int i, j, ret;
     int flags;
@@ -197,7 +197,10 @@ static int decode_frame(AVCodecContext *avctx, void *data, int *got_frame,
 
     bytestream2_init(&c->stream, avpkt->data, avpkt->size);
 
-    if ((ret = ff_get_buffer(avctx, frame, 0)) < 0) {
+    if (c->pic.data[0])
+        avctx->release_buffer(avctx, &c->pic);
+    c->pic.reference = 1;
+    if ((ret = ff_get_buffer(avctx, &c->pic)) < 0) {
         av_log(avctx, AV_LOG_ERROR, "get_buffer() failed\n");
         return ret;
     }
@@ -219,21 +222,22 @@ static int decode_frame(AVCodecContext *avctx, void *data, int *got_frame,
         vb_decode_palette(c, size);
     }
 
-    memcpy(frame->data[1], c->pal, AVPALETTE_SIZE);
-    frame->palette_has_changed = flags & VB_HAS_PALETTE;
+    memcpy(c->pic.data[1], c->pal, AVPALETTE_SIZE);
+    c->pic.palette_has_changed = flags & VB_HAS_PALETTE;
 
-    outptr = frame->data[0];
+    outptr = c->pic.data[0];
     srcptr = c->frame;
 
     for (i = 0; i < avctx->height; i++) {
         memcpy(outptr, srcptr, avctx->width);
         srcptr += avctx->width;
-        outptr += frame->linesize[0];
+        outptr += c->pic.linesize[0];
     }
 
     FFSWAP(uint8_t*, c->frame, c->prev_frame);
 
     *got_frame = 1;
+    *(AVFrame*)data = c->pic;
 
     /* always report that the buffer was completely consumed */
     return avpkt->size;
@@ -258,6 +262,8 @@ static av_cold int decode_end(AVCodecContext *avctx)
 
     av_freep(&c->frame);
     av_freep(&c->prev_frame);
+    if(c->pic.data[0])
+        avctx->release_buffer(avctx, &c->pic);
 
     return 0;
 }

@@ -35,7 +35,6 @@
 #include "libavutil/intreadwrite.h"
 #include "avcodec.h"
 #include "bytestream.h"
-#include "internal.h"
 
 #define CPAIR 2
 #define CQUAD 4
@@ -430,13 +429,15 @@ static int smc_decode_frame(AVCodecContext *avctx,
     int buf_size = avpkt->size;
     SmcContext *s = avctx->priv_data;
     const uint8_t *pal = av_packet_get_side_data(avpkt, AV_PKT_DATA_PALETTE, NULL);
-    int ret;
 
     bytestream2_init(&s->gb, buf, buf_size);
 
-    if ((ret = ff_reget_buffer(avctx, &s->frame)) < 0) {
+    s->frame.reference = 1;
+    s->frame.buffer_hints = FF_BUFFER_HINTS_VALID | FF_BUFFER_HINTS_PRESERVE |
+                            FF_BUFFER_HINTS_REUSABLE | FF_BUFFER_HINTS_READABLE;
+    if (avctx->reget_buffer(avctx, &s->frame)) {
         av_log(s->avctx, AV_LOG_ERROR, "reget_buffer() failed\n");
-        return ret;
+        return -1;
     }
 
     if (pal) {
@@ -447,8 +448,7 @@ static int smc_decode_frame(AVCodecContext *avctx,
     smc_decode_stream(s);
 
     *got_frame      = 1;
-    if ((ret = av_frame_ref(data, &s->frame)) < 0)
-        return ret;
+    *(AVFrame*)data = s->frame;
 
     /* always report that the buffer was completely consumed */
     return buf_size;
@@ -458,7 +458,8 @@ static av_cold int smc_decode_end(AVCodecContext *avctx)
 {
     SmcContext *s = avctx->priv_data;
 
-    av_frame_unref(&s->frame);
+    if (s->frame.data[0])
+        avctx->release_buffer(avctx, &s->frame);
 
     return 0;
 }

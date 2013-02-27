@@ -29,7 +29,6 @@
 #include "bytestream.h"
 #include "dsputil.h"
 #include "get_bits.h"
-#include "internal.h"
 #include "mss34dsp.h"
 #include "unary.h"
 
@@ -555,7 +554,11 @@ static int mss4_decode_frame(AVCodecContext *avctx, void *data, int *got_frame,
         return AVERROR_INVALIDDATA;
     }
 
-    if ((ret = ff_reget_buffer(avctx, &c->pic)) < 0) {
+    c->pic.reference    = 3;
+    c->pic.buffer_hints = FF_BUFFER_HINTS_VALID    |
+                          FF_BUFFER_HINTS_PRESERVE |
+                          FF_BUFFER_HINTS_REUSABLE;
+    if ((ret = avctx->reget_buffer(avctx, &c->pic)) < 0) {
         av_log(avctx, AV_LOG_ERROR, "reget_buffer() failed\n");
         return ret;
     }
@@ -564,8 +567,7 @@ static int mss4_decode_frame(AVCodecContext *avctx, void *data, int *got_frame,
                                                    : AV_PICTURE_TYPE_P;
     if (frame_type == SKIP_FRAME) {
         *got_frame      = 1;
-        if ((ret = av_frame_ref(data, &c->pic)) < 0)
-            return ret;
+        *(AVFrame*)data = c->pic;
 
         return buf_size;
     }
@@ -621,10 +623,8 @@ static int mss4_decode_frame(AVCodecContext *avctx, void *data, int *got_frame,
         dst[2] += c->pic.linesize[2] * 16;
     }
 
-    if ((ret = av_frame_ref(data, &c->pic)) < 0)
-        return ret;
-
     *got_frame      = 1;
+    *(AVFrame*)data = c->pic;
 
     return buf_size;
 }
@@ -650,6 +650,7 @@ static av_cold int mss4_decode_init(AVCodecContext *avctx)
     }
 
     avctx->pix_fmt     = AV_PIX_FMT_YUV444P;
+    avctx->coded_frame = &c->pic;
 
     return 0;
 }
@@ -659,7 +660,8 @@ static av_cold int mss4_decode_end(AVCodecContext *avctx)
     MSS4Context * const c = avctx->priv_data;
     int i;
 
-    av_frame_unref(&c->pic);
+    if (c->pic.data[0])
+        avctx->release_buffer(avctx, &c->pic);
     for (i = 0; i < 3; i++)
         av_freep(&c->prev_dc[i]);
     mss4_free_vlcs(c);

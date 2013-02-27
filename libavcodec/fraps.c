@@ -36,7 +36,6 @@
 #include "huffman.h"
 #include "bytestream.h"
 #include "dsputil.h"
-#include "internal.h"
 
 #define FPS_TAG MKTAG('F', 'P', 'S', 'x')
 
@@ -61,6 +60,7 @@ static av_cold int decode_init(AVCodecContext *avctx)
 {
     FrapsContext * const s = avctx->priv_data;
 
+    avctx->coded_frame = &s->frame;
     avctx->pix_fmt     = AV_PIX_FMT_NONE; /* set in decode_frame */
 
     s->avctx  = avctx;
@@ -161,7 +161,7 @@ static int decode_frame(AVCodecContext *avctx,
 
     pix_fmt = version & 1 ? AV_PIX_FMT_BGR24 : AV_PIX_FMT_YUVJ420P;
     if (avctx->pix_fmt != pix_fmt && f->data[0]) {
-        av_frame_unref(f);
+        avctx->release_buffer(avctx, f);
     }
     avctx->pix_fmt = pix_fmt;
 
@@ -184,7 +184,11 @@ static int decode_frame(AVCodecContext *avctx,
             return AVERROR_INVALIDDATA;
         }
 
-        if ((ret = ff_reget_buffer(avctx, f)) < 0) {
+        f->reference = 1;
+        f->buffer_hints = FF_BUFFER_HINTS_VALID |
+                          FF_BUFFER_HINTS_PRESERVE |
+                          FF_BUFFER_HINTS_REUSABLE;
+        if ((ret = avctx->reget_buffer(avctx, f)) < 0) {
             av_log(avctx, AV_LOG_ERROR, "reget_buffer() failed\n");
             return ret;
         }
@@ -221,7 +225,11 @@ static int decode_frame(AVCodecContext *avctx,
             return AVERROR_INVALIDDATA;
         }
 
-        if ((ret = ff_reget_buffer(avctx, f)) < 0) {
+        f->reference = 1;
+        f->buffer_hints = FF_BUFFER_HINTS_VALID |
+                          FF_BUFFER_HINTS_PRESERVE |
+                          FF_BUFFER_HINTS_REUSABLE;
+        if ((ret = avctx->reget_buffer(avctx, f)) < 0) {
             av_log(avctx, AV_LOG_ERROR, "reget_buffer() failed\n");
             return ret;
         }
@@ -244,7 +252,11 @@ static int decode_frame(AVCodecContext *avctx,
          * Fraps v4 is virtually the same
          */
         planes = 3;
-        if ((ret = ff_reget_buffer(avctx, f)) < 0) {
+        f->reference = 1;
+        f->buffer_hints = FF_BUFFER_HINTS_VALID |
+                          FF_BUFFER_HINTS_PRESERVE |
+                          FF_BUFFER_HINTS_REUSABLE;
+        if ((ret = avctx->reget_buffer(avctx, f)) < 0) {
             av_log(avctx, AV_LOG_ERROR, "reget_buffer() failed\n");
             return ret;
         }
@@ -288,7 +300,11 @@ static int decode_frame(AVCodecContext *avctx,
     case 5:
         /* Virtually the same as version 4, but is for RGB24 */
         planes = 3;
-        if ((ret = ff_reget_buffer(avctx, f)) < 0) {
+        f->reference = 1;
+        f->buffer_hints = FF_BUFFER_HINTS_VALID |
+                          FF_BUFFER_HINTS_PRESERVE |
+                          FF_BUFFER_HINTS_REUSABLE;
+        if ((ret = avctx->reget_buffer(avctx, f)) < 0) {
             av_log(avctx, AV_LOG_ERROR, "reget_buffer() failed\n");
             return ret;
         }
@@ -334,8 +350,7 @@ static int decode_frame(AVCodecContext *avctx,
         break;
     }
 
-    if ((ret = av_frame_ref(frame, f)) < 0)
-        return ret;
+    *frame = *f;
     *got_frame = 1;
 
     return buf_size;
@@ -351,7 +366,8 @@ static av_cold int decode_end(AVCodecContext *avctx)
 {
     FrapsContext *s = (FrapsContext*)avctx->priv_data;
 
-    av_frame_unref(&s->frame);
+    if (s->frame.data[0])
+        avctx->release_buffer(avctx, &s->frame);
 
     av_freep(&s->tmpbuf);
     return 0;

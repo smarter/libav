@@ -43,6 +43,7 @@ enum BMVFlags{
 
 typedef struct BMVDecContext {
     AVCodecContext *avctx;
+    AVFrame pic;
 
     uint8_t *frame, frame_base[SCREEN_WIDE * (SCREEN_HIGH + 1)];
     uint32_t pal[256];
@@ -197,7 +198,6 @@ static int decode_frame(AVCodecContext *avctx, void *data, int *got_frame,
                         AVPacket *pkt)
 {
     BMVDecContext * const c = avctx->priv_data;
-    AVFrame *frame = data;
     int type, scr_off;
     int i, ret;
     uint8_t *srcptr, *outptr;
@@ -240,7 +240,11 @@ static int decode_frame(AVCodecContext *avctx, void *data, int *got_frame,
         scr_off = 0;
     }
 
-    if ((ret = ff_get_buffer(avctx, frame, 0)) < 0) {
+    if (c->pic.data[0])
+        avctx->release_buffer(avctx, &c->pic);
+
+    c->pic.reference = 3;
+    if ((ret = ff_get_buffer(avctx, &c->pic)) < 0) {
         av_log(avctx, AV_LOG_ERROR, "get_buffer() failed\n");
         return ret;
     }
@@ -250,19 +254,20 @@ static int decode_frame(AVCodecContext *avctx, void *data, int *got_frame,
         return AVERROR_INVALIDDATA;
     }
 
-    memcpy(frame->data[1], c->pal, AVPALETTE_SIZE);
-    frame->palette_has_changed = type & BMV_PALETTE;
+    memcpy(c->pic.data[1], c->pal, AVPALETTE_SIZE);
+    c->pic.palette_has_changed = type & BMV_PALETTE;
 
-    outptr = frame->data[0];
+    outptr = c->pic.data[0];
     srcptr = c->frame;
 
     for (i = 0; i < avctx->height; i++) {
         memcpy(outptr, srcptr, avctx->width);
         srcptr += avctx->width;
-        outptr += frame->linesize[0];
+        outptr += c->pic.linesize[0];
     }
 
     *got_frame = 1;
+    *(AVFrame*)data = c->pic;
 
     /* always report that the buffer was completely consumed */
     return pkt->size;
@@ -276,6 +281,16 @@ static av_cold int decode_init(AVCodecContext *avctx)
     avctx->pix_fmt = AV_PIX_FMT_PAL8;
 
     c->frame = c->frame_base + 640;
+
+    return 0;
+}
+
+static av_cold int decode_end(AVCodecContext *avctx)
+{
+    BMVDecContext *c = avctx->priv_data;
+
+    if (c->pic.data[0])
+        avctx->release_buffer(avctx, &c->pic);
 
     return 0;
 }
@@ -322,7 +337,7 @@ static int bmv_aud_decode_frame(AVCodecContext *avctx, void *data,
 
     /* get output buffer */
     c->frame.nb_samples = total_blocks * 32;
-    if ((ret = ff_get_buffer(avctx, &c->frame, 0)) < 0) {
+    if ((ret = ff_get_buffer(avctx, &c->frame)) < 0) {
         av_log(avctx, AV_LOG_ERROR, "get_buffer() failed\n");
         return ret;
     }
@@ -351,6 +366,7 @@ AVCodec ff_bmv_video_decoder = {
     .id             = AV_CODEC_ID_BMV_VIDEO,
     .priv_data_size = sizeof(BMVDecContext),
     .init           = decode_init,
+    .close          = decode_end,
     .decode         = decode_frame,
     .capabilities   = CODEC_CAP_DR1,
     .long_name      = NULL_IF_CONFIG_SMALL("Discworld II BMV video"),

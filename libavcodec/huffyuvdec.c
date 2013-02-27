@@ -242,6 +242,7 @@ static av_cold int decode_init(AVCodecContext *avctx)
     ff_huffyuv_common_init(avctx);
     memset(s->vlc, 0, 3 * sizeof(VLC));
 
+    avctx->coded_frame = &s->picture;
     s->interlaced = s->height > 288;
 
     s->bgr32 = 1;
@@ -337,6 +338,7 @@ static av_cold int decode_init_thread_copy(AVCodecContext *avctx)
     HYuvContext *s = avctx->priv_data;
     int i;
 
+    avctx->coded_frame= &s->picture;
     ff_huffyuv_alloc_temp(s);
 
     for (i = 0; i < 6; i++)
@@ -442,7 +444,7 @@ static void decode_bgr_bitstream(HYuvContext *s, int count)
     }
 }
 
-static void draw_slice(HYuvContext *s, AVFrame *frame, int y)
+static void draw_slice(HYuvContext *s, int y)
 {
     int h, cy, i;
     int offset[AV_NUM_DATA_POINTERS];
@@ -459,14 +461,14 @@ static void draw_slice(HYuvContext *s, AVFrame *frame, int y)
         cy = y;
     }
 
-    offset[0] = frame->linesize[0] * y;
-    offset[1] = frame->linesize[1] * cy;
-    offset[2] = frame->linesize[2] * cy;
+    offset[0] = s->picture.linesize[0]*y;
+    offset[1] = s->picture.linesize[1]*cy;
+    offset[2] = s->picture.linesize[2]*cy;
     for (i = 3; i < AV_NUM_DATA_POINTERS; i++)
         offset[i] = 0;
     emms_c();
 
-    s->avctx->draw_horiz_band(s->avctx, frame, offset, y, 3, h);
+    s->avctx->draw_horiz_band(s->avctx, &s->picture, offset, y, 3, h);
 
     s->last_slice_end = y + h;
 }
@@ -481,9 +483,10 @@ static int decode_frame(AVCodecContext *avctx, void *data, int *got_frame,
     const int width2 = s->width>>1;
     const int height = s->height;
     int fake_ystride, fake_ustride, fake_vstride;
-    ThreadFrame frame = { .f = data };
-    AVFrame * const p = data;
+    AVFrame * const p = &s->picture;
     int table_size = 0;
+
+    AVFrame *picture = data;
 
     av_fast_malloc(&s->bitstream_buffer,
                    &s->bitstream_buffer_size,
@@ -495,7 +498,11 @@ static int decode_frame(AVCodecContext *avctx, void *data, int *got_frame,
     s->dsp.bswap_buf((uint32_t*)s->bitstream_buffer,
                      (const uint32_t*)buf, buf_size / 4);
 
-    if (ff_thread_get_buffer(avctx, &frame, 0) < 0) {
+    if (p->data[0])
+        ff_thread_release_buffer(avctx, p);
+
+    p->reference = 0;
+    if (ff_thread_get_buffer(avctx, p) < 0) {
         av_log(avctx, AV_LOG_ERROR, "get_buffer() failed\n");
         return -1;
     }
@@ -566,7 +573,7 @@ static int decode_frame(AVCodecContext *avctx, void *data, int *got_frame,
                         if (y >= s->height) break;
                     }
 
-                    draw_slice(s, p, y);
+                    draw_slice(s, y);
 
                     ydst = p->data[0] + p->linesize[0]*y;
                     udst = p->data[1] + p->linesize[1]*cy;
@@ -588,7 +595,7 @@ static int decode_frame(AVCodecContext *avctx, void *data, int *got_frame,
                         }
                     }
                 }
-                draw_slice(s, p, height);
+                draw_slice(s, height);
 
                 break;
             case MEDIAN:
@@ -645,7 +652,7 @@ static int decode_frame(AVCodecContext *avctx, void *data, int *got_frame,
                         }
                         if (y >= height) break;
                     }
-                    draw_slice(s, p, y);
+                    draw_slice(s, y);
 
                     decode_422_bitstream(s, width);
 
@@ -660,7 +667,7 @@ static int decode_frame(AVCodecContext *avctx, void *data, int *got_frame,
                     }
                 }
 
-                draw_slice(s, p, height);
+                draw_slice(s, height);
                 break;
             }
         }
@@ -704,7 +711,7 @@ static int decode_frame(AVCodecContext *avctx, void *data, int *got_frame,
                     }
                 }
                 // just 1 large slice as this is not possible in reverse order
-                draw_slice(s, p, height);
+                draw_slice(s, height);
                 break;
             default:
                 av_log(avctx, AV_LOG_ERROR,
@@ -718,6 +725,7 @@ static int decode_frame(AVCodecContext *avctx, void *data, int *got_frame,
     }
     emms_c();
 
+    *picture = *p;
     *got_frame = 1;
 
     return (get_bits_count(&s->gb) + 31) / 32 * 4 + table_size;
@@ -727,6 +735,9 @@ static av_cold int decode_end(AVCodecContext *avctx)
 {
     HYuvContext *s = avctx->priv_data;
     int i;
+
+    if (s->picture.data[0])
+        avctx->release_buffer(avctx, &s->picture);
 
     ff_huffyuv_common_end(s);
     av_freep(&s->bitstream_buffer);

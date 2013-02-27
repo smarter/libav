@@ -64,18 +64,26 @@
 #define CDG_PALETTE_SIZE          16
 
 typedef struct CDGraphicsContext {
-    AVFrame *frame;
+    AVFrame frame;
     int hscroll;
     int vscroll;
 } CDGraphicsContext;
+
+static void cdg_init_frame(AVFrame *frame)
+{
+    avcodec_get_frame_defaults(frame);
+    frame->reference = 3;
+    frame->buffer_hints = FF_BUFFER_HINTS_VALID    |
+                          FF_BUFFER_HINTS_READABLE |
+                          FF_BUFFER_HINTS_PRESERVE |
+                          FF_BUFFER_HINTS_REUSABLE;
+}
 
 static av_cold int cdg_decode_init(AVCodecContext *avctx)
 {
     CDGraphicsContext *cc = avctx->priv_data;
 
-    cc->frame = av_frame_alloc();
-    if (!cc->frame)
-        return AVERROR(ENOMEM);
+    cdg_init_frame(&cc->frame);
 
     avctx->width   = CDG_FULL_WIDTH;
     avctx->height  = CDG_FULL_HEIGHT;
@@ -87,8 +95,8 @@ static av_cold int cdg_decode_init(AVCodecContext *avctx)
 static void cdg_border_preset(CDGraphicsContext *cc, uint8_t *data)
 {
     int y;
-    int lsize    = cc->frame->linesize[0];
-    uint8_t *buf = cc->frame->data[0];
+    int lsize    = cc->frame.linesize[0];
+    uint8_t *buf = cc->frame.data[0];
     int color    = data[0] & 0x0F;
 
     if (!(data[1] & 0x0F)) {
@@ -112,7 +120,7 @@ static void cdg_load_palette(CDGraphicsContext *cc, uint8_t *data, int low)
     uint16_t color;
     int i;
     int array_offset  = low ? 0 : 8;
-    uint32_t *palette = (uint32_t *) cc->frame->data[1];
+    uint32_t *palette = (uint32_t *) cc->frame.data[1];
 
     for (i = 0; i < 8; i++) {
         color = (data[2 * i] << 6) + (data[2 * i + 1] & 0x3F);
@@ -121,7 +129,7 @@ static void cdg_load_palette(CDGraphicsContext *cc, uint8_t *data, int low)
         b = ((color     ) & 0x000F) * 17;
         palette[i + array_offset] = r << 16 | g << 8 | b;
     }
-    cc->frame->palette_has_changed = 1;
+    cc->frame.palette_has_changed = 1;
 }
 
 static int cdg_tile_block(CDGraphicsContext *cc, uint8_t *data, int b)
@@ -130,8 +138,8 @@ static int cdg_tile_block(CDGraphicsContext *cc, uint8_t *data, int b)
     int color;
     int x, y;
     int ai;
-    int stride   = cc->frame->linesize[0];
-    uint8_t *buf = cc->frame->data[0];
+    int stride   = cc->frame.linesize[0];
+    uint8_t *buf = cc->frame.data[0];
 
     ri = (data[2] & 0x1F) * CDG_TILE_HEIGHT + cc->vscroll;
     ci = (data[3] & 0x3F) * CDG_TILE_WIDTH  + cc->hscroll;
@@ -202,8 +210,8 @@ static void cdg_scroll(CDGraphicsContext *cc, uint8_t *data,
     int color;
     int hscmd, h_off, hinc, vscmd, v_off, vinc;
     int y;
-    int stride   = cc->frame->linesize[0];
-    uint8_t *in  = cc->frame->data[0];
+    int stride   = cc->frame.linesize[0];
+    uint8_t *in  = cc->frame.data[0];
     uint8_t *out = new_frame->data[0];
 
     color =  data[0] & 0x0F;
@@ -231,7 +239,7 @@ static void cdg_scroll(CDGraphicsContext *cc, uint8_t *data,
     if (!hinc && !vinc)
         return;
 
-    memcpy(new_frame->data[1], cc->frame->data[1], CDG_PALETTE_SIZE * 4);
+    memcpy(new_frame->data[1], cc->frame.data[1], CDG_PALETTE_SIZE * 4);
 
     for (y = FFMAX(0, vinc); y < FFMIN(CDG_FULL_HEIGHT + vinc, CDG_FULL_HEIGHT); y++)
         memcpy(out + FFMAX(0, hinc) + stride * y,
@@ -266,7 +274,7 @@ static int cdg_decode_frame(AVCodecContext *avctx,
     int ret;
     uint8_t command, inst;
     uint8_t cdg_data[CDG_DATA_SIZE];
-    AVFrame *new_frame;
+    AVFrame new_frame;
     CDGraphicsContext *cc = avctx->priv_data;
 
     if (buf_size < CDG_MINIMUM_PKT_SIZE) {
@@ -274,7 +282,7 @@ static int cdg_decode_frame(AVCodecContext *avctx,
         return AVERROR(EINVAL);
     }
 
-    ret = ff_reget_buffer(avctx, cc->frame);
+    ret = avctx->reget_buffer(avctx, &cc->frame);
     if (ret) {
         av_log(avctx, AV_LOG_ERROR, "reget_buffer() failed\n");
         return ret;
@@ -290,8 +298,8 @@ static int cdg_decode_frame(AVCodecContext *avctx,
         switch (inst) {
         case CDG_INST_MEMORY_PRESET:
             if (!(cdg_data[1] & 0x0F))
-                memset(cc->frame->data[0], cdg_data[0] & 0x0F,
-                       cc->frame->linesize[0] * CDG_FULL_HEIGHT);
+                memset(cc->frame.data[0], cdg_data[0] & 0x0F,
+                       cc->frame.linesize[0] * CDG_FULL_HEIGHT);
             break;
         case CDG_INST_LOAD_PAL_LO:
         case CDG_INST_LOAD_PAL_HIGH:
@@ -325,32 +333,28 @@ static int cdg_decode_frame(AVCodecContext *avctx,
                 return AVERROR(EINVAL);
             }
 
-            if (!(new_frame = av_frame_alloc()))
-                return AVERROR(ENOMEM);
-
-            ret = ff_get_buffer(avctx, new_frame, AV_GET_BUFFER_FLAG_REF);
+            cdg_init_frame(&new_frame);
+            ret = ff_get_buffer(avctx, &new_frame);
             if (ret) {
                 av_log(avctx, AV_LOG_ERROR, "get_buffer() failed\n");
-                av_frame_free(&new_frame);
                 return ret;
             }
 
-            cdg_scroll(cc, cdg_data, new_frame, inst == CDG_INST_SCROLL_COPY);
-            av_frame_free(&cc->frame);
+            cdg_scroll(cc, cdg_data, &new_frame, inst == CDG_INST_SCROLL_COPY);
+            avctx->release_buffer(avctx, &cc->frame);
             cc->frame = new_frame;
             break;
         default:
             break;
         }
 
-        if ((ret = av_frame_ref(data, cc->frame)) < 0)
-            return ret;
         *got_frame = 1;
     } else {
         *got_frame = 0;
         buf_size   = 0;
     }
 
+    *(AVFrame *) data = cc->frame;
     return buf_size;
 }
 
@@ -358,7 +362,8 @@ static av_cold int cdg_decode_end(AVCodecContext *avctx)
 {
     CDGraphicsContext *cc = avctx->priv_data;
 
-    av_frame_free(&cc->frame);
+    if (cc->frame.data[0])
+        avctx->release_buffer(avctx, &cc->frame);
 
     return 0;
 }

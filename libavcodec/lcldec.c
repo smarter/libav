@@ -55,6 +55,8 @@
  * Decoder context
  */
 typedef struct LclDecContext {
+    AVFrame pic;
+
     // Image type
     int imgtype;
     // Compression type
@@ -158,7 +160,6 @@ static int zlib_decomp(AVCodecContext *avctx, const uint8_t *src, int src_len, i
  */
 static int decode_frame(AVCodecContext *avctx, void *data, int *got_frame, AVPacket *avpkt)
 {
-    AVFrame *frame = data;
     const uint8_t *buf = avpkt->data;
     int buf_size = avpkt->size;
     LclDecContext * const c = avctx->priv_data;
@@ -175,12 +176,17 @@ static int decode_frame(AVCodecContext *avctx, void *data, int *got_frame, AVPac
     unsigned int mthread_inlen, mthread_outlen;
     unsigned int len = buf_size;
 
-    if ((ret = ff_get_buffer(avctx, frame, 0)) < 0) {
+    if(c->pic.data[0])
+        avctx->release_buffer(avctx, &c->pic);
+
+    c->pic.reference = 0;
+    c->pic.buffer_hints = FF_BUFFER_HINTS_VALID;
+    if ((ret = ff_get_buffer(avctx, &c->pic)) < 0) {
         av_log(avctx, AV_LOG_ERROR, "get_buffer() failed\n");
         return ret;
     }
 
-    outptr = frame->data[0]; // Output image pointer
+    outptr = c->pic.data[0]; // Output image pointer
 
     /* Decompress frame */
     switch (avctx->codec_id) {
@@ -368,9 +374,9 @@ static int decode_frame(AVCodecContext *avctx, void *data, int *got_frame, AVPac
     }
 
     /* Convert colorspace */
-    y_out = frame->data[0] + (height - 1) * frame->linesize[0];
-    u_out = frame->data[1] + (height - 1) * frame->linesize[1];
-    v_out = frame->data[2] + (height - 1) * frame->linesize[2];
+    y_out = c->pic.data[0] + (height - 1) * c->pic.linesize[0];
+    u_out = c->pic.data[1] + (height - 1) * c->pic.linesize[1];
+    v_out = c->pic.data[2] + (height - 1) * c->pic.linesize[2];
     switch (c->imgtype) {
     case IMGTYPE_YUV111:
         for (row = 0; row < height; row++) {
@@ -379,9 +385,9 @@ static int decode_frame(AVCodecContext *avctx, void *data, int *got_frame, AVPac
                 u_out[col] = *encoded++ + 128;
                 v_out[col] = *encoded++ + 128;
             }
-            y_out -= frame->linesize[0];
-            u_out -= frame->linesize[1];
-            v_out -= frame->linesize[2];
+            y_out -= c->pic.linesize[0];
+            u_out -= c->pic.linesize[1];
+            v_out -= c->pic.linesize[2];
         }
         break;
     case IMGTYPE_YUV422:
@@ -394,14 +400,14 @@ static int decode_frame(AVCodecContext *avctx, void *data, int *got_frame, AVPac
                 v_out[ col >> 1     ] = *encoded++ + 128;
                 v_out[(col >> 1) + 1] = *encoded++ + 128;
             }
-            y_out -= frame->linesize[0];
-            u_out -= frame->linesize[1];
-            v_out -= frame->linesize[2];
+            y_out -= c->pic.linesize[0];
+            u_out -= c->pic.linesize[1];
+            v_out -= c->pic.linesize[2];
         }
         break;
     case IMGTYPE_RGB24:
         for (row = height - 1; row >= 0; row--) {
-            pixel_ptr = row * frame->linesize[0];
+            pixel_ptr = row * c->pic.linesize[0];
             memcpy(outptr + pixel_ptr, encoded, 3 * width);
             encoded += 3 * width;
         }
@@ -414,9 +420,9 @@ static int decode_frame(AVCodecContext *avctx, void *data, int *got_frame, AVPac
                 u_out[col >> 2] = *encoded++ + 128;
                 v_out[col >> 2] = *encoded++ + 128;
             }
-            y_out -= frame->linesize[0];
-            u_out -= frame->linesize[1];
-            v_out -= frame->linesize[2];
+            y_out -= c->pic.linesize[0];
+            u_out -= c->pic.linesize[1];
+            v_out -= c->pic.linesize[2];
         }
         break;
     case IMGTYPE_YUV211:
@@ -427,26 +433,26 @@ static int decode_frame(AVCodecContext *avctx, void *data, int *got_frame, AVPac
                 u_out[col >> 1] = *encoded++ + 128;
                 v_out[col >> 1] = *encoded++ + 128;
             }
-            y_out -= frame->linesize[0];
-            u_out -= frame->linesize[1];
-            v_out -= frame->linesize[2];
+            y_out -= c->pic.linesize[0];
+            u_out -= c->pic.linesize[1];
+            v_out -= c->pic.linesize[2];
         }
         break;
     case IMGTYPE_YUV420:
-        u_out = frame->data[1] + ((height >> 1) - 1) * frame->linesize[1];
-        v_out = frame->data[2] + ((height >> 1) - 1) * frame->linesize[2];
+        u_out = c->pic.data[1] + ((height >> 1) - 1) * c->pic.linesize[1];
+        v_out = c->pic.data[2] + ((height >> 1) - 1) * c->pic.linesize[2];
         for (row = 0; row < height - 1; row += 2) {
             for (col = 0; col < width - 1; col += 2) {
                 memcpy(y_out + col, encoded, 2);
                 encoded += 2;
-                memcpy(y_out + col - frame->linesize[0], encoded, 2);
+                memcpy(y_out + col - c->pic.linesize[0], encoded, 2);
                 encoded += 2;
                 u_out[col >> 1] = *encoded++ + 128;
                 v_out[col >> 1] = *encoded++ + 128;
             }
-            y_out -= frame->linesize[0] << 1;
-            u_out -= frame->linesize[1];
-            v_out -= frame->linesize[2];
+            y_out -= c->pic.linesize[0] << 1;
+            u_out -= c->pic.linesize[1];
+            v_out -= c->pic.linesize[2];
         }
         break;
     default:
@@ -455,6 +461,7 @@ static int decode_frame(AVCodecContext *avctx, void *data, int *got_frame, AVPac
     }
 
     *got_frame = 1;
+    *(AVFrame*)data = c->pic;
 
     /* always report that the buffer was completely consumed */
     return buf_size;
@@ -618,6 +625,8 @@ static av_cold int decode_end(AVCodecContext *avctx)
     LclDecContext * const c = avctx->priv_data;
 
     av_freep(&c->decomp_buf);
+    if (c->pic.data[0])
+        avctx->release_buffer(avctx, &c->pic);
 #if CONFIG_ZLIB_DECODER
     if (avctx->codec_id == AV_CODEC_ID_ZLIB)
         inflateEnd(&c->zstream);

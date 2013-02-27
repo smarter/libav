@@ -326,12 +326,16 @@ static int dvvideo_decode_frame(AVCodecContext *avctx,
         return -1; /* NOTE: we only accept several full frames */
     }
 
+    if (s->picture.data[0])
+        avctx->release_buffer(avctx, &s->picture);
+
+    s->picture.reference = 0;
     s->picture.key_frame = 1;
     s->picture.pict_type = AV_PICTURE_TYPE_I;
     avctx->pix_fmt   = s->sys->pix_fmt;
     avctx->time_base = s->sys->time_base;
     avcodec_set_dimensions(avctx, s->sys->width, s->sys->height);
-    if (ff_get_buffer(avctx, &s->picture, 0) < 0) {
+    if (ff_get_buffer(avctx, &s->picture) < 0) {
         av_log(avctx, AV_LOG_ERROR, "get_buffer() failed\n");
         return -1;
     }
@@ -346,7 +350,7 @@ static int dvvideo_decode_frame(AVCodecContext *avctx,
 
     /* return image */
     *got_frame = 1;
-    av_frame_move_ref(data, &s->picture);
+    *(AVFrame*)data = s->picture;
 
     /* Determine the codec's sample_aspect ratio from the packet */
     vsc_pack = buf + 80*5 + 48 + 5;
@@ -363,7 +367,8 @@ static int dvvideo_close(AVCodecContext *c)
 {
     DVVideoContext *s = c->priv_data;
 
-    av_frame_unref(&s->picture);
+    if (s->picture.data[0])
+        c->release_buffer(c, &s->picture);
 
     return 0;
 }

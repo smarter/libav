@@ -158,13 +158,14 @@ static int request_frame(AVFilterLink *link)
             handle_trimming(ctx);
 
         if (nb_samples = get_delay(s)) {
-            AVFrame *buf = ff_get_audio_buffer(link, nb_samples);
+            AVFilterBufferRef *buf = ff_get_audio_buffer(link, AV_PERM_WRITE,
+                                                         nb_samples);
             if (!buf)
                 return AVERROR(ENOMEM);
             ret = avresample_convert(s->avr, buf->extended_data,
                                      buf->linesize[0], nb_samples, NULL, 0, 0);
             if (ret <= 0) {
-                av_frame_free(&buf);
+                avfilter_unref_bufferp(&buf);
                 return (ret < 0) ? ret : AVERROR_EOF;
             }
 
@@ -176,20 +177,20 @@ static int request_frame(AVFilterLink *link)
     return ret;
 }
 
-static int write_to_fifo(ASyncContext *s, AVFrame *buf)
+static int write_to_fifo(ASyncContext *s, AVFilterBufferRef *buf)
 {
     int ret = avresample_convert(s->avr, NULL, 0, 0, buf->extended_data,
-                                 buf->linesize[0], buf->nb_samples);
-    av_frame_free(&buf);
+                                 buf->linesize[0], buf->audio->nb_samples);
+    avfilter_unref_buffer(buf);
     return ret;
 }
 
-static int filter_frame(AVFilterLink *inlink, AVFrame *buf)
+static int filter_frame(AVFilterLink *inlink, AVFilterBufferRef *buf)
 {
     AVFilterContext  *ctx = inlink->dst;
     ASyncContext       *s = ctx->priv;
     AVFilterLink *outlink = ctx->outputs[0];
-    int nb_channels = av_get_channel_layout_nb_channels(buf->channel_layout);
+    int nb_channels = av_get_channel_layout_nb_channels(buf->audio->channel_layout);
     int64_t pts = (buf->pts == AV_NOPTS_VALUE) ? buf->pts :
                   av_rescale_q(buf->pts, inlink->time_base, outlink->time_base);
     int out_size, ret;
@@ -228,7 +229,8 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *buf)
     }
 
     if (out_size > 0) {
-        AVFrame *buf_out = ff_get_audio_buffer(outlink, out_size);
+        AVFilterBufferRef *buf_out = ff_get_audio_buffer(outlink, AV_PERM_WRITE,
+                                                         out_size);
         if (!buf_out) {
             ret = AVERROR(ENOMEM);
             goto fail;
@@ -270,11 +272,11 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *buf)
 
     s->pts = pts - avresample_get_delay(s->avr);
     ret = avresample_convert(s->avr, NULL, 0, 0, buf->extended_data,
-                             buf->linesize[0], buf->nb_samples);
+                             buf->linesize[0], buf->audio->nb_samples);
 
     s->first_frame = 0;
 fail:
-    av_frame_free(&buf);
+    avfilter_unref_buffer(buf);
 
     return ret;
 }

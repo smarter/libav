@@ -23,7 +23,6 @@
 #define AVFILTER_AVFILTER_H
 
 #include "libavutil/avutil.h"
-#include "libavutil/frame.h"
 #include "libavutil/log.h"
 #include "libavutil/samplefmt.h"
 #include "libavutil/pixfmt.h"
@@ -55,7 +54,6 @@ typedef struct AVFilterLink    AVFilterLink;
 typedef struct AVFilterPad     AVFilterPad;
 typedef struct AVFilterFormats AVFilterFormats;
 
-#if FF_API_AVFILTERBUFFER
 /**
  * A reference-counted buffer data type used by the filter system. Filters
  * should not store pointers to this structure directly, but instead use the
@@ -179,7 +177,6 @@ typedef struct AVFilterBufferRef {
 /**
  * Copy properties of src to dst, without copying the actual data
  */
-attribute_deprecated
 void avfilter_copy_buffer_ref_props(AVFilterBufferRef *dst, AVFilterBufferRef *src);
 
 /**
@@ -191,7 +188,6 @@ void avfilter_copy_buffer_ref_props(AVFilterBufferRef *dst, AVFilterBufferRef *s
  * @return      a new reference to the buffer with the same properties as the
  *              old, excluding any permissions denied by pmask
  */
-attribute_deprecated
 AVFilterBufferRef *avfilter_ref_buffer(AVFilterBufferRef *ref, int pmask);
 
 /**
@@ -203,7 +199,6 @@ AVFilterBufferRef *avfilter_ref_buffer(AVFilterBufferRef *ref, int pmask);
  * @note it is recommended to use avfilter_unref_bufferp() instead of this
  * function
  */
-attribute_deprecated
 void avfilter_unref_buffer(AVFilterBufferRef *ref);
 
 /**
@@ -213,9 +208,7 @@ void avfilter_unref_buffer(AVFilterBufferRef *ref);
  *
  * @param ref pointer to the buffer reference
  */
-attribute_deprecated
 void avfilter_unref_bufferp(AVFilterBufferRef **ref);
-#endif
 
 #if FF_API_AVFILTERPAD_PUBLIC
 /**
@@ -246,7 +239,7 @@ struct AVFilterPad {
      *
      * Input pads only.
      */
-    attribute_deprecated int min_perms;
+    int min_perms;
 
     /**
      * Permissions which are not accepted on incoming buffers. Any buffer
@@ -257,7 +250,7 @@ struct AVFilterPad {
      *
      * Input pads only.
      */
-    attribute_deprecated int rej_perms;
+    int rej_perms;
 
     /**
      * @deprecated unused
@@ -270,7 +263,7 @@ struct AVFilterPad {
      *
      * Input video pads only.
      */
-    AVFrame *(*get_video_buffer)(AVFilterLink *link, int w, int h);
+    AVFilterBufferRef *(*get_video_buffer)(AVFilterLink *link, int perms, int w, int h);
 
     /**
      * Callback function to get an audio buffer. If NULL, the filter system will
@@ -278,7 +271,8 @@ struct AVFilterPad {
      *
      * Input audio pads only.
      */
-    AVFrame *(*get_audio_buffer)(AVFilterLink *link, int nb_samples);
+    AVFilterBufferRef *(*get_audio_buffer)(AVFilterLink *link, int perms,
+                                           int nb_samples);
 
     /**
      * @deprecated unused
@@ -300,7 +294,7 @@ struct AVFilterPad {
      * must ensure that samplesref is properly unreferenced on error if it
      * hasn't been passed on to another filter.
      */
-    int (*filter_frame)(AVFilterLink *link, AVFrame *frame);
+    int (*filter_frame)(AVFilterLink *link, AVFilterBufferRef *frame);
 
     /**
      * Frame poll callback. This returns the number of immediately available
@@ -345,8 +339,6 @@ struct AVFilterPad {
      * input pads only.
      */
     int needs_fifo;
-
-    int needs_writable;
 };
 #endif
 
@@ -543,7 +535,6 @@ int avfilter_link(AVFilterContext *src, unsigned srcpad,
  */
 int avfilter_config_links(AVFilterContext *filter);
 
-#if FF_API_AVFILTERBUFFER
 /**
  * Create a buffer reference wrapped around an already allocated image
  * buffer.
@@ -555,7 +546,6 @@ int avfilter_config_links(AVFilterContext *filter);
  * @param h the height of the image specified by the data and linesize arrays
  * @param format the pixel format of the image specified by the data and linesize arrays
  */
-attribute_deprecated
 AVFilterBufferRef *
 avfilter_get_video_buffer_ref_from_arrays(uint8_t *data[4], int linesize[4], int perms,
                                           int w, int h, enum AVPixelFormat format);
@@ -571,14 +561,12 @@ avfilter_get_video_buffer_ref_from_arrays(uint8_t *data[4], int linesize[4], int
  * @param sample_fmt     the format of each sample in the buffer to allocate
  * @param channel_layout the channel layout of the buffer
  */
-attribute_deprecated
 AVFilterBufferRef *avfilter_get_audio_buffer_ref_from_arrays(uint8_t **data,
                                                              int linesize,
                                                              int perms,
                                                              int nb_samples,
                                                              enum AVSampleFormat sample_fmt,
                                                              uint64_t channel_layout);
-#endif
 
 /** Initialize the filter system. Register all builtin filters. */
 void avfilter_register_all(void);
@@ -657,14 +645,12 @@ void avfilter_free(AVFilterContext *filter);
 int avfilter_insert_filter(AVFilterLink *link, AVFilterContext *filt,
                            unsigned filt_srcpad_idx, unsigned filt_dstpad_idx);
 
-#if FF_API_AVFILTERBUFFER
 /**
  * Copy the frame properties of src to dst, without copying the actual
  * image data.
  *
  * @return 0 on success, a negative number on error.
  */
-attribute_deprecated
 int avfilter_copy_frame_props(AVFilterBufferRef *dst, const AVFrame *src);
 
 /**
@@ -673,8 +659,6 @@ int avfilter_copy_frame_props(AVFilterBufferRef *dst, const AVFrame *src);
  *
  * @return 0 on success, a negative number on error.
  */
-attribute_deprecated
 int avfilter_copy_buf_props(AVFrame *dst, const AVFilterBufferRef *src);
-#endif
 
 #endif /* AVFILTER_AVFILTER_H */

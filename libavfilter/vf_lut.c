@@ -295,28 +295,28 @@ static int config_props(AVFilterLink *inlink)
     return 0;
 }
 
-static int filter_frame(AVFilterLink *inlink, AVFrame *in)
+static int filter_frame(AVFilterLink *inlink, AVFilterBufferRef *in)
 {
     AVFilterContext *ctx = inlink->dst;
     LutContext *lut = ctx->priv;
     AVFilterLink *outlink = ctx->outputs[0];
-    AVFrame *out;
+    AVFilterBufferRef *out;
     uint8_t *inrow, *outrow, *inrow0, *outrow0;
     int i, j, k, plane;
 
-    out = ff_get_video_buffer(outlink, outlink->w, outlink->h);
+    out = ff_get_video_buffer(outlink, AV_PERM_WRITE, outlink->w, outlink->h);
     if (!out) {
-        av_frame_free(&in);
+        avfilter_unref_bufferp(&in);
         return AVERROR(ENOMEM);
     }
-    av_frame_copy_props(out, in);
+    avfilter_copy_buffer_ref_props(out, in);
 
     if (lut->is_rgb) {
         /* packed */
         inrow0  = in ->data[0];
         outrow0 = out->data[0];
 
-        for (i = 0; i < in->height; i ++) {
+        for (i = 0; i < in->video->h; i ++) {
             inrow  = inrow0;
             outrow = outrow0;
             for (j = 0; j < inlink->w; j++) {
@@ -337,7 +337,7 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in)
             inrow  = in ->data[plane];
             outrow = out->data[plane];
 
-            for (i = 0; i < in->height >> vsub; i ++) {
+            for (i = 0; i < in->video->h >> vsub; i ++) {
                 for (j = 0; j < inlink->w>>hsub; j++)
                     outrow[j] = lut->lut[plane][inrow[j]];
                 inrow  += in ->linesize[plane];
@@ -346,7 +346,7 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in)
         }
     }
 
-    av_frame_free(&in);
+    avfilter_unref_bufferp(&in);
     return ff_filter_frame(outlink, out);
 }
 
@@ -355,7 +355,7 @@ static const AVFilterPad inputs[] = {
       .type            = AVMEDIA_TYPE_VIDEO,
       .filter_frame    = filter_frame,
       .config_props    = config_props,
-    },
+      .min_perms       = AV_PERM_READ, },
     { .name = NULL}
 };
 static const AVFilterPad outputs[] = {

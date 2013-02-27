@@ -1162,10 +1162,8 @@ static int ff_asf_parse_packet(AVFormatContext *s, AVIOContext *pb, AVPacket *pk
                            asf_st->ds_packet_size, asf_st->ds_span);
                 } else {
                     /* packet descrambling */
-                    AVBufferRef *buf = av_buffer_alloc(asf_st->pkt.size +
-                                                       FF_INPUT_BUFFER_PADDING_SIZE);
-                    if (buf) {
-                        uint8_t *newdata = buf->data;
+                    uint8_t *newdata = av_malloc(asf_st->pkt.size + FF_INPUT_BUFFER_PADDING_SIZE);
+                    if (newdata) {
                         int offset = 0;
                         memset(newdata + asf_st->pkt.size, 0, FF_INPUT_BUFFER_PADDING_SIZE);
                         while (offset < asf_st->pkt.size) {
@@ -1180,18 +1178,13 @@ static int ff_asf_parse_packet(AVFormatContext *s, AVIOContext *pb, AVPacket *pk
                                    asf_st->ds_chunk_size);
                             offset += asf_st->ds_chunk_size;
                         }
-                        av_buffer_unref(&asf_st->pkt.buf);
-                        asf_st->pkt.buf  = buf;
-                        asf_st->pkt.data = buf->data;
+                        av_free(asf_st->pkt.data);
+                        asf_st->pkt.data = newdata;
                     }
                 }
             }
             asf_st->frag_offset         = 0;
             *pkt                        = asf_st->pkt;
-#if FF_API_DESTRUCT_PACKET
-            asf_st->pkt.destruct        = NULL;
-#endif
-            asf_st->pkt.buf             = 0;
             asf_st->pkt.size            = 0;
             asf_st->pkt.data            = 0;
             asf_st->pkt.side_data_elems = 0;

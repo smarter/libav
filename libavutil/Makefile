@@ -10,7 +10,6 @@ HEADERS = adler32.h                                                     \
           avutil.h                                                      \
           base64.h                                                      \
           blowfish.h                                                    \
-          buffer.h                                                      \
           bswap.h                                                       \
           channel_layout.h                                              \
           common.h                                                      \
@@ -20,7 +19,6 @@ HEADERS = adler32.h                                                     \
           eval.h                                                        \
           fifo.h                                                        \
           file.h                                                        \
-          frame.h                                                       \
           hmac.h                                                        \
           imgutils.h                                                    \
           intfloat.h                                                    \
@@ -61,7 +59,6 @@ OBJS = adler32.o                                                        \
        avstring.o                                                       \
        base64.o                                                         \
        blowfish.o                                                       \
-       buffer.o                                                         \
        channel_layout.o                                                 \
        cpu.o                                                            \
        crc.o                                                            \
@@ -71,7 +68,6 @@ OBJS = adler32.o                                                        \
        fifo.o                                                           \
        file.o                                                           \
        float_dsp.o                                                      \
-       frame.o                                                          \
        hmac.o                                                           \
        imgutils.o                                                       \
        intfloat_readwrite.o                                             \

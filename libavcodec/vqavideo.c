@@ -94,6 +94,7 @@
 typedef struct VqaContext {
 
     AVCodecContext *avctx;
+    AVFrame frame;
     GetByteContext gb;
 
     uint32_t palette[PALETTE_COUNT];
@@ -186,6 +187,8 @@ static av_cold int vqa_decode_init(AVCodecContext *avctx)
                 s->codebook[codebook_index++] = i;
     }
     s->next_codebook_buffer_index = 0;
+
+    s->frame.data[0] = NULL;
 
     return 0;
 fail:
@@ -300,7 +303,7 @@ static int decode_format80(GetByteContext *gb, int src_size,
     return 0; // let's display what we decoded anyway
 }
 
-static int vqa_decode_chunk(VqaContext *s, AVFrame *frame)
+static int vqa_decode_chunk(VqaContext *s)
 {
     unsigned int chunk_type;
     unsigned int chunk_size;
@@ -468,7 +471,7 @@ static int vqa_decode_chunk(VqaContext *s, AVFrame *frame)
         index_shift = 3;
     for (y = 0; y < s->height; y += s->vector_height) {
         for (x = 0; x < s->width; x += 4, lobytes++, hibytes++) {
-            pixel_ptr = y * frame->linesize[0] + x;
+            pixel_ptr = y * s->frame.linesize[0] + x;
 
             /* get the vector index, the method for which varies according to
              * VQA file version */
@@ -483,11 +486,11 @@ static int vqa_decode_chunk(VqaContext *s, AVFrame *frame)
                 /* uniform color fill - a quick hack */
                 if (hibyte == 0xFF) {
                     while (lines--) {
-                        frame->data[0][pixel_ptr + 0] = 255 - lobyte;
-                        frame->data[0][pixel_ptr + 1] = 255 - lobyte;
-                        frame->data[0][pixel_ptr + 2] = 255 - lobyte;
-                        frame->data[0][pixel_ptr + 3] = 255 - lobyte;
-                        pixel_ptr += frame->linesize[0];
+                        s->frame.data[0][pixel_ptr + 0] = 255 - lobyte;
+                        s->frame.data[0][pixel_ptr + 1] = 255 - lobyte;
+                        s->frame.data[0][pixel_ptr + 2] = 255 - lobyte;
+                        s->frame.data[0][pixel_ptr + 3] = 255 - lobyte;
+                        pixel_ptr += s->frame.linesize[0];
                     }
                     lines=0;
                 }
@@ -508,11 +511,11 @@ static int vqa_decode_chunk(VqaContext *s, AVFrame *frame)
             }
 
             while (lines--) {
-                frame->data[0][pixel_ptr + 0] = s->codebook[vector_index++];
-                frame->data[0][pixel_ptr + 1] = s->codebook[vector_index++];
-                frame->data[0][pixel_ptr + 2] = s->codebook[vector_index++];
-                frame->data[0][pixel_ptr + 3] = s->codebook[vector_index++];
-                pixel_ptr += frame->linesize[0];
+                s->frame.data[0][pixel_ptr + 0] = s->codebook[vector_index++];
+                s->frame.data[0][pixel_ptr + 1] = s->codebook[vector_index++];
+                s->frame.data[0][pixel_ptr + 2] = s->codebook[vector_index++];
+                s->frame.data[0][pixel_ptr + 3] = s->codebook[vector_index++];
+                pixel_ptr += s->frame.linesize[0];
             }
         }
     }
@@ -581,23 +584,26 @@ static int vqa_decode_frame(AVCodecContext *avctx,
                             AVPacket *avpkt)
 {
     VqaContext *s = avctx->priv_data;
-    AVFrame *frame = data;
     int res;
 
-    if ((res = ff_get_buffer(avctx, frame, 0)) < 0) {
+    if (s->frame.data[0])
+        avctx->release_buffer(avctx, &s->frame);
+
+    if ((res = ff_get_buffer(avctx, &s->frame)) < 0) {
         av_log(s->avctx, AV_LOG_ERROR, "  VQA Video: get_buffer() failed\n");
         return res;
     }
 
     bytestream2_init(&s->gb, avpkt->data, avpkt->size);
-    if ((res = vqa_decode_chunk(s, frame)) < 0)
+    if ((res = vqa_decode_chunk(s)) < 0)
         return res;
 
     /* make the palette available on the way out */
-    memcpy(frame->data[1], s->palette, PALETTE_COUNT * 4);
-    frame->palette_has_changed = 1;
+    memcpy(s->frame.data[1], s->palette, PALETTE_COUNT * 4);
+    s->frame.palette_has_changed = 1;
 
     *got_frame      = 1;
+    *(AVFrame*)data = s->frame;
 
     /* report that the buffer was completely consumed */
     return avpkt->size;
@@ -610,6 +616,9 @@ static av_cold int vqa_decode_end(AVCodecContext *avctx)
     av_freep(&s->codebook);
     av_freep(&s->next_codebook_buffer);
     av_freep(&s->decode_buffer);
+
+    if (s->frame.data[0])
+        avctx->release_buffer(avctx, &s->frame);
 
     return 0;
 }

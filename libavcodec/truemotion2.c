@@ -28,7 +28,6 @@
 #include "bytestream.h"
 #include "get_bits.h"
 #include "dsputil.h"
-#include "internal.h"
 
 #define TM2_ESCAPE 0x80000000
 #define TM2_DELTAS 64
@@ -848,8 +847,9 @@ static int decode_frame(AVCodecContext *avctx,
         av_log(avctx, AV_LOG_ERROR, "Cannot allocate temporary buffer\n");
         return AVERROR(ENOMEM);
     }
-
-    if ((ret = ff_reget_buffer(avctx, p)) < 0) {
+    p->reference = 1;
+    p->buffer_hints = FF_BUFFER_HINTS_VALID | FF_BUFFER_HINTS_PRESERVE | FF_BUFFER_HINTS_REUSABLE;
+    if ((ret = avctx->reget_buffer(avctx, p)) < 0) {
         av_log(avctx, AV_LOG_ERROR, "get_buffer() failed\n");
         av_free(swbuf);
         return ret;
@@ -883,10 +883,10 @@ static int decode_frame(AVCodecContext *avctx,
 
     l->cur = !l->cur;
     *got_frame      = 1;
-    ret = av_frame_ref(data, &l->pic);
+    *(AVFrame*)data = l->pic;
     av_free(swbuf);
 
-    return (ret < 0) ? ret : buf_size;
+    return buf_size;
 }
 
 static av_cold int decode_init(AVCodecContext *avctx)
@@ -968,7 +968,8 @@ static av_cold int decode_end(AVCodecContext *avctx)
         av_free(l->V2_base);
     }
 
-    av_frame_unref(pic);
+    if (pic->data[0])
+        avctx->release_buffer(avctx, pic);
 
     return 0;
 }

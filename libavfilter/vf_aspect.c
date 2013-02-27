@@ -65,11 +65,11 @@ static av_cold int init(AVFilterContext *ctx, const char *args)
     return 0;
 }
 
-static int filter_frame(AVFilterLink *link, AVFrame *frame)
+static int filter_frame(AVFilterLink *link, AVFilterBufferRef *frame)
 {
     AspectContext *aspect = link->dst->priv;
 
-    frame->sample_aspect_ratio = aspect->aspect;
+    frame->video->pixel_aspect = aspect->aspect;
     return ff_filter_frame(link->dst->outputs[0], frame);
 }
 

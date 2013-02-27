@@ -358,16 +358,18 @@ static int decode_frame(AVCodecContext *avctx, void *data, int *got_frame,
     GetByteContext gb2;
     GetBitContext gb;
     int blocks, blk, bw, bh;
-    int i, ret;
+    int i;
     int stride;
     int flags;
 
     if (avpkt->size <= 769)
         return 0;
 
-    if ((ret = ff_reget_buffer(avctx, &smk->pic)) < 0) {
+    smk->pic.reference = 1;
+    smk->pic.buffer_hints = FF_BUFFER_HINTS_VALID | FF_BUFFER_HINTS_PRESERVE | FF_BUFFER_HINTS_REUSABLE;
+    if(avctx->reget_buffer(avctx, &smk->pic) < 0){
         av_log(avctx, AV_LOG_ERROR, "get_buffer() failed\n");
-        return ret;
+        return -1;
     }
 
     /* make the palette available on the way out */
@@ -495,10 +497,8 @@ static int decode_frame(AVCodecContext *avctx, void *data, int *got_frame,
 
     }
 
-    if ((ret = av_frame_ref(data, &smk->pic)) < 0)
-        return ret;
-
     *got_frame = 1;
+    *(AVFrame*)data = smk->pic;
 
     /* always report that the buffer was completely consumed */
     return avpkt->size;
@@ -548,7 +548,8 @@ static av_cold int decode_end(AVCodecContext *avctx)
     av_freep(&smk->full_tbl);
     av_freep(&smk->type_tbl);
 
-    av_frame_unref(&smk->pic);
+    if (smk->pic.data[0])
+        avctx->release_buffer(avctx, &smk->pic);
 
     return 0;
 }
@@ -622,7 +623,7 @@ static int smka_decode_frame(AVCodecContext *avctx, void *data,
 
     /* get output buffer */
     s->frame.nb_samples = unp_size / (avctx->channels * (bits + 1));
-    if ((ret = ff_get_buffer(avctx, &s->frame, 0)) < 0) {
+    if ((ret = ff_get_buffer(avctx, &s->frame)) < 0) {
         av_log(avctx, AV_LOG_ERROR, "get_buffer() failed\n");
         return ret;
     }

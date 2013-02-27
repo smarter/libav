@@ -80,11 +80,11 @@ static void apply_delogo(uint8_t *dst, int dst_linesize,
     topright = src+logo_y1     * src_linesize+logo_x2-1;
     botleft  = src+(logo_y2-1) * src_linesize+logo_x1;
 
+    dst += (logo_y1+1)*dst_linesize;
+    src += (logo_y1+1)*src_linesize;
+
     if (!direct)
         av_image_copy_plane(dst, dst_linesize, src, src_linesize, w, h);
-
-    dst += (logo_y1 + 1) * dst_linesize;
-    src += (logo_y1 + 1) * src_linesize;
 
     for (y = logo_y1+1; y < logo_y2-1; y++) {
         for (x = logo_x1+1,
@@ -215,30 +215,30 @@ static av_cold int init(AVFilterContext *ctx, const char *args)
     return 0;
 }
 
-static int filter_frame(AVFilterLink *inlink, AVFrame *in)
+static int filter_frame(AVFilterLink *inlink, AVFilterBufferRef *in)
 {
     DelogoContext *delogo = inlink->dst->priv;
     AVFilterLink *outlink = inlink->dst->outputs[0];
     const AVPixFmtDescriptor *desc = av_pix_fmt_desc_get(inlink->format);
-    AVFrame *out;
+    AVFilterBufferRef *out;
     int hsub0 = desc->log2_chroma_w;
     int vsub0 = desc->log2_chroma_h;
-    int direct = 0;
+    int direct;
     int plane;
 
-    if (av_frame_is_writable(in)) {
+    if ((in->perms & AV_PERM_WRITE) && !(in->perms & AV_PERM_PRESERVE)) {
         direct = 1;
         out = in;
     } else {
-        out = ff_get_video_buffer(outlink, outlink->w, outlink->h);
+        out = ff_get_video_buffer(outlink, AV_PERM_WRITE, outlink->w, outlink->h);
         if (!out) {
-            av_frame_free(&in);
+            avfilter_unref_bufferp(&in);
             return AVERROR(ENOMEM);
         }
 
-        av_frame_copy_props(out, in);
-        out->width  = outlink->w;
-        out->height = outlink->h;
+        avfilter_copy_buffer_ref_props(out, in);
+        out->video->w = outlink->w;
+        out->video->h = outlink->h;
     }
 
     for (plane = 0; plane < 4 && in->data[plane]; plane++) {
@@ -255,7 +255,7 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in)
     }
 
     if (!direct)
-        av_frame_free(&in);
+        avfilter_unref_bufferp(&in);
 
     return ff_filter_frame(outlink, out);
 }
@@ -266,6 +266,8 @@ static const AVFilterPad avfilter_vf_delogo_inputs[] = {
         .type             = AVMEDIA_TYPE_VIDEO,
         .get_video_buffer = ff_null_get_video_buffer,
         .filter_frame     = filter_frame,
+        .min_perms        = AV_PERM_WRITE | AV_PERM_READ,
+        .rej_perms        = AV_PERM_PRESERVE
     },
     { NULL }
 };

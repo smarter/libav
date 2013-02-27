@@ -28,15 +28,29 @@
 #include "internal.h"
 #include "s3tc.h"
 
+typedef struct TXDContext {
+    AVFrame picture;
+} TXDContext;
+
+static av_cold int txd_init(AVCodecContext *avctx) {
+    TXDContext *s = avctx->priv_data;
+
+    avcodec_get_frame_defaults(&s->picture);
+    avctx->coded_frame = &s->picture;
+
+    return 0;
+}
+
 static int txd_decode_frame(AVCodecContext *avctx, void *data, int *got_frame,
                             AVPacket *avpkt) {
+    TXDContext * const s = avctx->priv_data;
     GetByteContext gb;
-    AVFrame * const p = data;
+    AVFrame *picture = data;
+    AVFrame * const p = &s->picture;
     unsigned int version, w, h, d3d_format, depth, stride, flags;
     unsigned int y, v;
     uint8_t *ptr;
     uint32_t *pal;
-    int ret;
 
     bytestream2_init(&gb, avpkt->data, avpkt->size);
     version         = bytestream2_get_le32(&gb);
@@ -51,7 +65,7 @@ static int txd_decode_frame(AVCodecContext *avctx, void *data, int *got_frame,
     if (version < 8 || version > 9) {
         av_log(avctx, AV_LOG_ERROR, "texture data version %i is unsupported\n",
                                                                     version);
-        return AVERROR_INVALIDDATA;
+        return -1;
     }
 
     if (depth == 8) {
@@ -60,16 +74,19 @@ static int txd_decode_frame(AVCodecContext *avctx, void *data, int *got_frame,
         avctx->pix_fmt = AV_PIX_FMT_RGB32;
     } else {
         av_log(avctx, AV_LOG_ERROR, "depth of %i is unsupported\n", depth);
-        return AVERROR_INVALIDDATA;
+        return -1;
     }
 
-    if ((ret = av_image_check_size(w, h, 0, avctx)) < 0)
-        return ret;
+    if (p->data[0])
+        avctx->release_buffer(avctx, p);
+
+    if (av_image_check_size(w, h, 0, avctx))
+        return -1;
     if (w != avctx->width || h != avctx->height)
         avcodec_set_dimensions(avctx, w, h);
-    if ((ret = ff_get_buffer(avctx, p, 0)) < 0) {
+    if (ff_get_buffer(avctx, p) < 0) {
         av_log(avctx, AV_LOG_ERROR, "get_buffer() failed\n");
-        return ret;
+        return -1;
     }
 
     p->pict_type = AV_PICTURE_TYPE_I;
@@ -117,19 +134,32 @@ static int txd_decode_frame(AVCodecContext *avctx, void *data, int *got_frame,
         }
     }
 
+    *picture   = s->picture;
     *got_frame = 1;
 
     return avpkt->size;
 
 unsupported:
     av_log(avctx, AV_LOG_ERROR, "unsupported d3d format (%08x)\n", d3d_format);
-    return AVERROR_PATCHWELCOME;
+    return -1;
+}
+
+static av_cold int txd_end(AVCodecContext *avctx) {
+    TXDContext *s = avctx->priv_data;
+
+    if (s->picture.data[0])
+        avctx->release_buffer(avctx, &s->picture);
+
+    return 0;
 }
 
 AVCodec ff_txd_decoder = {
     .name           = "txd",
     .type           = AVMEDIA_TYPE_VIDEO,
     .id             = AV_CODEC_ID_TXD,
+    .priv_data_size = sizeof(TXDContext),
+    .init           = txd_init,
+    .close          = txd_end,
     .decode         = txd_decode_frame,
     .capabilities   = CODEC_CAP_DR1,
     .long_name      = NULL_IF_CONFIG_SMALL("Renderware TXD (TeXture Dictionary) image"),

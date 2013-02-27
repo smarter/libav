@@ -121,35 +121,35 @@ static int config_props_output(AVFilterLink *outlink)
     return 0;
 }
 
-static int filter_frame(AVFilterLink *inlink, AVFrame *in)
+static int filter_frame(AVFilterLink *inlink, AVFilterBufferRef *in)
 {
     AVFilterLink *outlink = inlink->dst->outputs[0];
     TransContext *trans = inlink->dst->priv;
-    AVFrame *out;
+    AVFilterBufferRef *out;
     int plane;
 
-    out = ff_get_video_buffer(outlink, outlink->w, outlink->h);
+    out = ff_get_video_buffer(outlink, AV_PERM_WRITE, outlink->w, outlink->h);
     if (!out) {
-        av_frame_free(&in);
+        avfilter_unref_bufferp(&in);
         return AVERROR(ENOMEM);
     }
 
     out->pts = in->pts;
 
-    if (in->sample_aspect_ratio.num == 0) {
-        out->sample_aspect_ratio = in->sample_aspect_ratio;
+    if (in->video->pixel_aspect.num == 0) {
+        out->video->pixel_aspect = in->video->pixel_aspect;
     } else {
-        out->sample_aspect_ratio.num = in->sample_aspect_ratio.den;
-        out->sample_aspect_ratio.den = in->sample_aspect_ratio.num;
+        out->video->pixel_aspect.num = in->video->pixel_aspect.den;
+        out->video->pixel_aspect.den = in->video->pixel_aspect.num;
     }
 
     for (plane = 0; out->data[plane]; plane++) {
         int hsub = plane == 1 || plane == 2 ? trans->hsub : 0;
         int vsub = plane == 1 || plane == 2 ? trans->vsub : 0;
         int pixstep = trans->pixsteps[plane];
-        int inh  = in->height  >> vsub;
-        int outw = out->width  >> hsub;
-        int outh = out->height >> vsub;
+        int inh  = in->video->h>>vsub;
+        int outw = out->video->w>>hsub;
+        int outh = out->video->h>>vsub;
         uint8_t *dst, *src;
         int dstlinesize, srclinesize;
         int x, y;
@@ -194,7 +194,7 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in)
         }
     }
 
-    av_frame_free(&in);
+    avfilter_unref_bufferp(&in);
     return ff_filter_frame(outlink, out);
 }
 
@@ -203,6 +203,7 @@ static const AVFilterPad avfilter_vf_transpose_inputs[] = {
         .name        = "default",
         .type        = AVMEDIA_TYPE_VIDEO,
         .filter_frame = filter_frame,
+        .min_perms   = AV_PERM_READ,
     },
     { NULL }
 };

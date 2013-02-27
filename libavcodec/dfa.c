@@ -28,6 +28,8 @@
 #include "libavutil/mem.h"
 
 typedef struct DfaContext {
+    AVFrame pic;
+
     uint32_t pal[256];
     uint8_t *frame_buf;
 } DfaContext;
@@ -309,7 +311,6 @@ static int dfa_decode_frame(AVCodecContext *avctx,
                             void *data, int *got_frame,
                             AVPacket *avpkt)
 {
-    AVFrame *frame = data;
     DfaContext *s = avctx->priv_data;
     GetByteContext gb;
     const uint8_t *buf = avpkt->data;
@@ -318,7 +319,10 @@ static int dfa_decode_frame(AVCodecContext *avctx,
     int ret;
     int i, pal_elems;
 
-    if ((ret = ff_get_buffer(avctx, frame, 0))) {
+    if (s->pic.data[0])
+        avctx->release_buffer(avctx, &s->pic);
+
+    if ((ret = ff_get_buffer(avctx, &s->pic))) {
         av_log(avctx, AV_LOG_ERROR, "get_buffer() failed\n");
         return ret;
     }
@@ -336,7 +340,7 @@ static int dfa_decode_frame(AVCodecContext *avctx,
                 s->pal[i] = bytestream2_get_be24(&gb) << 2;
                 s->pal[i] |= (s->pal[i] >> 6) & 0x333;
             }
-            frame->palette_has_changed = 1;
+            s->pic.palette_has_changed = 1;
         } else if (chunk_type <= 9) {
             if (decoder[chunk_type - 2](&gb, s->frame_buf, avctx->width, avctx->height)) {
                 av_log(avctx, AV_LOG_ERROR, "Error decoding %s chunk\n",
@@ -351,15 +355,16 @@ static int dfa_decode_frame(AVCodecContext *avctx,
     }
 
     buf = s->frame_buf;
-    dst = frame->data[0];
+    dst = s->pic.data[0];
     for (i = 0; i < avctx->height; i++) {
         memcpy(dst, buf, avctx->width);
-        dst += frame->linesize[0];
+        dst += s->pic.linesize[0];
         buf += avctx->width;
     }
-    memcpy(frame->data[1], s->pal, sizeof(s->pal));
+    memcpy(s->pic.data[1], s->pal, sizeof(s->pal));
 
     *got_frame = 1;
+    *(AVFrame*)data = s->pic;
 
     return avpkt->size;
 }
@@ -367,6 +372,9 @@ static int dfa_decode_frame(AVCodecContext *avctx,
 static av_cold int dfa_decode_end(AVCodecContext *avctx)
 {
     DfaContext *s = avctx->priv_data;
+
+    if (s->pic.data[0])
+        avctx->release_buffer(avctx, &s->pic);
 
     av_freep(&s->frame_buf);
 

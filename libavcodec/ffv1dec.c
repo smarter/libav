@@ -317,16 +317,16 @@ static int decode_slice_header(FFV1Context *f, FFV1Context *fs)
 
     ps = get_symbol(c, state, 0);
     if (ps == 1) {
-        f->cur->interlaced_frame = 1;
-        f->cur->top_field_first  = 1;
+        f->picture.interlaced_frame = 1;
+        f->picture.top_field_first  = 1;
     } else if (ps == 2) {
-        f->cur->interlaced_frame = 1;
-        f->cur->top_field_first  = 0;
+        f->picture.interlaced_frame = 1;
+        f->picture.top_field_first  = 0;
     } else if (ps == 3) {
-        f->cur->interlaced_frame = 0;
+        f->picture.interlaced_frame = 0;
     }
-    f->cur->sample_aspect_ratio.num = get_symbol(c, state, 0);
-    f->cur->sample_aspect_ratio.den = get_symbol(c, state, 0);
+    f->picture.sample_aspect_ratio.num = get_symbol(c, state, 0);
+    f->picture.sample_aspect_ratio.den = get_symbol(c, state, 0);
 
     return 0;
 }
@@ -339,7 +339,7 @@ static int decode_slice(AVCodecContext *c, void *arg)
     const int ps = (av_pix_fmt_desc_get(c->pix_fmt)->flags & PIX_FMT_PLANAR)
                    ? (c->bits_per_raw_sample > 8) + 1
                    : 4;
-    AVFrame *const p = f->cur;
+    AVFrame *const p = &f->picture;
 
     if (f->version > 2) {
         if (decode_slice_header(f, fs) < 0) {
@@ -349,7 +349,7 @@ static int decode_slice(AVCodecContext *c, void *arg)
     }
     if ((ret = ffv1_init_slice_state(f, fs)) < 0)
         return ret;
-    if (f->cur->key_frame)
+    if (f->picture.key_frame)
         ffv1_clear_slice_state(f, fs);
     width  = fs->slice_width;
     height = fs->slice_height;
@@ -800,18 +800,23 @@ static int ffv1_decode_frame(AVCodecContext *avctx, void *data,
     int buf_size        = avpkt->size;
     FFV1Context *f      = avctx->priv_data;
     RangeCoder *const c = &f->slice_context[0]->c;
+    AVFrame *const p    = &f->picture;
     int i, ret;
     uint8_t keystate = 128;
     const uint8_t *buf_p;
 
-    f->cur = data;
+    AVFrame *picture = data;
+
+    /* release previously stored data */
+    if (p->data[0])
+        avctx->release_buffer(avctx, p);
 
     ff_init_range_decoder(c, buf, buf_size);
     ff_build_rac_states(c, 0.05 * (1LL << 32), 256 - 8);
 
-    f->cur->pict_type = AV_PICTURE_TYPE_I; //FIXME I vs. P
+    p->pict_type = AV_PICTURE_TYPE_I; //FIXME I vs. P
     if (get_rac(c, &keystate)) {
-        f->cur->key_frame    = 1;
+        p->key_frame    = 1;
         f->key_frame_ok = 0;
         if ((ret = read_header(f)) < 0)
             return ret;
@@ -822,10 +827,11 @@ static int ffv1_decode_frame(AVCodecContext *avctx, void *data,
                    "Cannot decode non-keyframe without valid keyframe\n");
             return AVERROR_INVALIDDATA;
         }
-        f->cur->key_frame = 0;
+        p->key_frame = 0;
     }
 
-    if ((ret = ff_get_buffer(avctx, f->cur, AV_GET_BUFFER_FLAG_REF)) < 0) {
+    p->reference = 3; //for error concealment
+    if ((ret = ff_get_buffer(avctx, p)) < 0) {
         av_log(avctx, AV_LOG_ERROR, "get_buffer() failed\n");
         return ret;
     }
@@ -833,7 +839,7 @@ static int ffv1_decode_frame(AVCodecContext *avctx, void *data,
     if (avctx->debug & FF_DEBUG_PICT_INFO)
         av_log(avctx, AV_LOG_DEBUG,
                "ver:%d keyframe:%d coder:%d ec:%d slices:%d bps:%d\n",
-               f->version, f->cur->key_frame, f->ac, f->ec, f->slice_count,
+               f->version, p->key_frame, f->ac, f->ec, f->slice_count,
                f->avctx->bits_per_raw_sample);
 
     buf_p = buf + buf_size;
@@ -879,13 +885,13 @@ static int ffv1_decode_frame(AVCodecContext *avctx, void *data,
             for (j = 0; j < 4; j++) {
                 int sh = (j == 1 || j == 2) ? f->chroma_h_shift : 0;
                 int sv = (j == 1 || j == 2) ? f->chroma_v_shift : 0;
-                dst[j] = f->cur->data[j] + f->cur->linesize[j] *
+                dst[j] = f->picture.data[j] + f->picture.linesize[j] *
                          (fs->slice_y >> sv) + (fs->slice_x >> sh);
                 src[j] = f->last_picture.data[j] +
                          f->last_picture.linesize[j] *
                          (fs->slice_y >> sv) + (fs->slice_x >> sh);
             }
-            av_image_copy(dst, f->cur->linesize, (const uint8_t **)src,
+            av_image_copy(dst, f->picture.linesize, (const uint8_t **)src,
                           f->last_picture.linesize,
                           avctx->pix_fmt, fs->slice_width,
                           fs->slice_height);
@@ -894,12 +900,10 @@ static int ffv1_decode_frame(AVCodecContext *avctx, void *data,
 
     f->picture_number++;
 
-    av_frame_unref(&f->last_picture);
-    if ((ret = av_frame_ref(&f->last_picture, f->cur)) < 0)
-        return ret;
-    f->cur = NULL;
-
+    *picture   = *p;
     *got_frame = 1;
+
+    FFSWAP(AVFrame, f->picture, f->last_picture);
 
     return buf_size;
 }

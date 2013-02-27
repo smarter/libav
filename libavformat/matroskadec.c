@@ -1107,8 +1107,7 @@ static int matroska_decode_buffer(uint8_t** buf, int* buf_size,
 static void matroska_fix_ass_packet(MatroskaDemuxContext *matroska,
                                     AVPacket *pkt, uint64_t display_duration)
 {
-    AVBufferRef *line;
-    char *layer, *ptr = pkt->data, *end = ptr+pkt->size;
+    char *line, *layer, *ptr = pkt->data, *end = ptr+pkt->size;
     for (; *ptr!=',' && ptr<end-1; ptr++);
     if (*ptr == ',')
         layer = ++ptr;
@@ -1126,14 +1125,13 @@ static void matroska_fix_ass_packet(MatroskaDemuxContext *matroska,
         es = ec/   100;  ec -=    100*es;
         *ptr++ = '\0';
         len = 50 + end-ptr + FF_INPUT_BUFFER_PADDING_SIZE;
-        if (!(line = av_buffer_alloc(len)))
+        if (!(line = av_malloc(len)))
             return;
-        snprintf(line->data, len,"Dialogue: %s,%d:%02d:%02d.%02d,%d:%02d:%02d.%02d,%s\r\n",
+        snprintf(line,len,"Dialogue: %s,%d:%02d:%02d.%02d,%d:%02d:%02d.%02d,%s\r\n",
                  layer, sh, sm, ss, sc, eh, em, es, ec, ptr);
-        av_buffer_unref(&pkt->buf);
-        pkt->buf  = line;
-        pkt->data = line->data;
-        pkt->size = strlen(line->data);
+        av_free(pkt->data);
+        pkt->data = line;
+        pkt->size = strlen(line);
     }
 }
 
