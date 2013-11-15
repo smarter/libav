@@ -420,7 +420,7 @@ static int set_sps(HEVCContext *s, const HEVCSPS *sps)
     }
 
     ff_hevc_pred_init(&s->hpc,     sps->bit_depth);
-    ff_hevc_dsp_init (&s->hevcdsp, sps->bit_depth);
+    ff_hevcdsp_init  (&s->hevcdsp, sps->bit_depth);
     ff_videodsp_init (&s->vdsp,    sps->bit_depth);
 
     if (sps->sao_enabled) {

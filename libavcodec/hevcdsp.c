@@ -111,7 +111,7 @@ DECLARE_ALIGNED(16, const int8_t, ff_hevc_epel_filters[7][16]) = {
 #include "hevcdsp_template.c"
 #undef BIT_DEPTH
 
-void ff_hevc_dsp_init(HEVCDSPContext *hevcdsp, int bit_depth)
+void ff_hevcdsp_init(HEVCDSPContext *hevcdsp, int bit_depth)
 {
 #undef FUNC
 #define FUNC(a, depth) a ## _ ## depth
@@ -187,4 +187,7 @@ void ff_hevc_dsp_init(HEVCDSPContext *hevcdsp, int bit_depth)
         HEVC_DSP(8);
         break;
     }
+
+    if (ARCH_X86)
+      ff_hevcdsp_init_x86(hevcdsp, bit_depth);
 }
