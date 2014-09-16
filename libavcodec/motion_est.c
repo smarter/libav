@@ -805,6 +805,8 @@ static int interlaced_search(MpegEncContext *s, int ref_index,
                 best_field= field_select;
             }
         }
+        if (best_field < 0)
+            return AVERROR_INVALIDDATA;
         {
             int16_t (*mv_table)[2]= mv_tables[block][best_field];
 
