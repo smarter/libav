@@ -338,11 +338,6 @@ int attribute_align_arg avresample_convert(AVAudioResampleContext *avr,
     int ret, direct_output;
 
     /* reset internal buffers */
-    if (avr->in_buffer) {
-        avr->in_buffer->nb_samples = 0;
-        ff_audio_data_set_channels(avr->in_buffer,
-                                   avr->in_buffer->allocated_channels);
-    }
     if (avr->out_buffer) {
         avr->out_buffer->nb_samples = 0;
         ff_audio_data_set_channels(avr->out_buffer,
@@ -394,6 +389,10 @@ int attribute_align_arg avresample_convert(AVAudioResampleContext *avr,
                 return ret;
             current_buffer = avr->out_buffer;
         } else if (avr->in_copy_needed || avr->in_convert_needed) {
+            avr->in_buffer->nb_samples = 0;
+            ff_audio_data_set_channels(avr->in_buffer,
+                                       avr->in_buffer->allocated_channels);
+
             /* if needed, copy or convert input to in_buffer, and downmix if
                applicable */
             if (avr->in_convert_needed) {
