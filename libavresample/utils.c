@@ -338,7 +338,7 @@ int attribute_align_arg avresample_convert(AVAudioResampleContext *avr,
     int ret, direct_output;
 
     /* reset internal buffers */
-    if (avr->out_buffer) {
+    if (avr->out_convert_needed) {
         avr->out_buffer->nb_samples = 0;
         ff_audio_data_set_channels(avr->out_buffer,
                                    avr->out_buffer->allocated_channels);
