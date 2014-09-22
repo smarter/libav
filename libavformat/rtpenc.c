@@ -560,7 +560,7 @@ static int rtp_write_packet(AVFormatContext *s1, AVPacket *pkt)
                 av_packet_get_side_data(pkt, AV_PKT_DATA_H263_MB_INFO,
                                         &mb_info_size);
             if (!mb_info) {
-                av_log(s1, AV_LOG_WARNING, "No MB info found.\n")
+                av_log(s1, AV_LOG_WARNING, "No MB info found.\n");
             } else {
                 ff_rtp_send_h263_rfc2190(s1, pkt->data, size,
                                          mb_info, mb_info_size);
