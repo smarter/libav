@@ -1837,6 +1837,10 @@ static int matroska_read_header(AVFormatContext *s)
         ebml_free(ebml_syntax, &ebml);
         return AVERROR_PATCHWELCOME;
     }
+    if (!ebml.doctype) {
+        av_log(s, AV_LOG_ERROR, "EBML doctype not set!\n");
+        return AVERROR_INVALIDDATA;
+    }
     for (i = 0; i < FF_ARRAY_ELEMS(matroska_doctypes); i++)
         if (!strcmp(ebml.doctype, matroska_doctypes[i]))
             break;
