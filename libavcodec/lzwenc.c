@@ -129,7 +129,7 @@ static inline int findCode(LZWEncodeState * s, uint8_t c, int hash_prefix)
     int h = hash(FFMAX(hash_prefix, 0), c);
     int hash_offset = hashOffset(h);
 
-    while (s->tab[h].hash_prefix != LZW_PREFIX_FREE) {
+    while (h >= 0 && s->tab[h].hash_prefix != LZW_PREFIX_FREE) {
         if ((s->tab[h].suffix == c)
             && (s->tab[h].hash_prefix == hash_prefix))
             return h;
