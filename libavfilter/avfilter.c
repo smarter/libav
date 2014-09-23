@@ -204,7 +204,7 @@ int avfilter_config_links(AVFilterContext *filter)
 
             if ((config_link = link->dstpad->config_props))
                 if ((ret = config_link(link)) < 0) {
-                    av_log(link->src, AV_LOG_ERROR,
+                    av_log(link->dst, AV_LOG_ERROR,
                            "Failed to configure input pad on %s\n",
                            link->dst->name);
                     return ret;
@@ -729,7 +729,8 @@ int ff_filter_frame(AVFilterLink *link, AVFrame *frame)
 {
     int (*filter_frame)(AVFilterLink *, AVFrame *);
     AVFilterPad *dst = link->dstpad;
-    AVFrame *out;
+    AVFrame *out = NULL;
+    int ret;
 
     FF_DPRINTF_START(NULL, filter_frame);
     ff_dlog_link(NULL, link, 1);
@@ -748,13 +749,18 @@ int ff_filter_frame(AVFilterLink *link, AVFrame *frame)
         case AVMEDIA_TYPE_AUDIO:
             out = ff_get_audio_buffer(link, frame->nb_samples);
             break;
-        default: return AVERROR(EINVAL);
+        default:
+            ret = AVERROR(EINVAL);
+            goto fail;
         }
         if (!out) {
-            av_frame_free(&frame);
-            return AVERROR(ENOMEM);
+            ret = AVERROR(ENOMEM);
+            goto fail;
         }
-        av_frame_copy_props(out, frame);
+
+        ret = av_frame_copy_props(out, frame);
+        if (ret < 0)
+            goto fail;
 
         switch (link->type) {
         case AVMEDIA_TYPE_VIDEO:
@@ -767,7 +773,9 @@ int ff_filter_frame(AVFilterLink *link, AVFrame *frame)
                             av_get_channel_layout_nb_channels(frame->channel_layout),
                             frame->format);
             break;
-        default: return AVERROR(EINVAL);
+        default:
+            ret = AVERROR(EINVAL);
+            goto fail;
         }
 
         av_frame_free(&frame);
@@ -775,6 +783,11 @@ int ff_filter_frame(AVFilterLink *link, AVFrame *frame)
         out = frame;
 
     return filter_frame(link, out);
+
+fail:
+    av_frame_free(&out);
+    av_frame_free(&frame);
+    return ret;
 }
 
 const AVClass *avfilter_get_class(void)

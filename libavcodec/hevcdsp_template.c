@@ -50,7 +50,7 @@ static void FUNC(transquant_bypass4x4)(uint8_t *_dst, int16_t *coeffs,
 
     for (y = 0; y < 4; y++) {
         for (x = 0; x < 4; x++) {
-            dst[x] += *coeffs;
+            dst[x] = av_clip_pixel(dst[x] + *coeffs);
             coeffs++;
         }
         dst += stride;
@@ -67,7 +67,7 @@ static void FUNC(transquant_bypass8x8)(uint8_t *_dst, int16_t *coeffs,
 
     for (y = 0; y < 8; y++) {
         for (x = 0; x < 8; x++) {
-            dst[x] += *coeffs;
+            dst[x] = av_clip_pixel(dst[x] + *coeffs);
             coeffs++;
         }
         dst += stride;
@@ -84,7 +84,7 @@ static void FUNC(transquant_bypass16x16)(uint8_t *_dst, int16_t *coeffs,
 
     for (y = 0; y < 16; y++) {
         for (x = 0; x < 16; x++) {
-            dst[x] += *coeffs;
+            dst[x] = av_clip_pixel(dst[x] + *coeffs);
             coeffs++;
         }
         dst += stride;
@@ -101,7 +101,7 @@ static void FUNC(transquant_bypass32x32)(uint8_t *_dst, int16_t *coeffs,
 
     for (y = 0; y < 32; y++) {
         for (x = 0; x < 32; x++) {
-            dst[x] += *coeffs;
+            dst[x] = av_clip_pixel(dst[x] + *coeffs);
             coeffs++;
         }
         dst += stride;
@@ -393,7 +393,7 @@ static void FUNC(sao_band_filter)(uint8_t *_dst, uint8_t *_src,
         offset_table[(k + sao_left_class) & 31] = sao_offset_val[k + 1];
     for (y = 0; y < height; y++) {
         for (x = 0; x < width; x++)
-            dst[x] = av_clip_pixel(src[x] + offset_table[av_clip_pixel(src[x] >> shift)]);
+            dst[x] = av_clip_pixel(src[x] + offset_table[src[x] >> shift]);
         dst += stride;
         src += stride;
     }
@@ -1164,13 +1164,15 @@ static void FUNC(weighted_pred_avg)(uint8_t denom,
 
 static void FUNC(hevc_loop_filter_luma)(uint8_t *_pix,
                                         ptrdiff_t _xstride, ptrdiff_t _ystride,
-                                        int *_beta, int *_tc,
+                                        int beta, int *_tc,
                                         uint8_t *_no_p, uint8_t *_no_q)
 {
     int d, j;
     pixel *pix        = (pixel *)_pix;
     ptrdiff_t xstride = _xstride / sizeof(pixel);
     ptrdiff_t ystride = _ystride / sizeof(pixel);
+
+    beta <<= BIT_DEPTH - 8;
 
     for (j = 0; j < 2; j++) {
         const int dp0  = abs(P2  - 2 * P1  + P0);
@@ -1179,7 +1181,6 @@ static void FUNC(hevc_loop_filter_luma)(uint8_t *_pix,
         const int dq3  = abs(TQ2 - 2 * TQ1 + TQ0);
         const int d0   = dp0 + dq0;
         const int d3   = dp3 + dq3;
-        const int beta = _beta[j] << (BIT_DEPTH - 8);
         const int tc   = _tc[j]   << (BIT_DEPTH - 8);
         const int no_p = _no_p[j];
         const int no_q = _no_q[j];
@@ -1281,7 +1282,7 @@ static void FUNC(hevc_loop_filter_chroma)(uint8_t *_pix, ptrdiff_t _xstride,
             const int p0 = P0;
             const int q0 = Q0;
             const int q1 = Q1;
-            delta0 = av_clip((((q0 - p0) << 2) + p1 - q1 + 4) >> 3, -tc, tc);
+            delta0 = av_clip((((q0 - p0) * 4) + p1 - q1 + 4) >> 3, -tc, tc);
             if (!no_p)
                 P0 = av_clip_pixel(p0 + delta0);
             if (!no_q)
@@ -1306,7 +1307,7 @@ static void FUNC(hevc_v_loop_filter_chroma)(uint8_t *pix, ptrdiff_t stride,
 }
 
 static void FUNC(hevc_h_loop_filter_luma)(uint8_t *pix, ptrdiff_t stride,
-                                          int *beta, int *tc, uint8_t *no_p,
+                                          int beta, int *tc, uint8_t *no_p,
                                           uint8_t *no_q)
 {
     FUNC(hevc_loop_filter_luma)(pix, stride, sizeof(pixel),
@@ -1314,7 +1315,7 @@ static void FUNC(hevc_h_loop_filter_luma)(uint8_t *pix, ptrdiff_t stride,
 }
 
 static void FUNC(hevc_v_loop_filter_luma)(uint8_t *pix, ptrdiff_t stride,
-                                          int *beta, int *tc, uint8_t *no_p,
+                                          int beta, int *tc, uint8_t *no_p,
                                           uint8_t *no_q)
 {
     FUNC(hevc_loop_filter_luma)(pix, sizeof(pixel), stride,

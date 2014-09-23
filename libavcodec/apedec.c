@@ -20,11 +20,14 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
+#include <inttypes.h>
+
 #include "libavutil/avassert.h"
 #include "libavutil/channel_layout.h"
 #include "libavutil/opt.h"
+#include "apedsp.h"
 #include "avcodec.h"
-#include "dsputil.h"
+#include "bswapdsp.h"
 #include "bytestream.h"
 #include "internal.h"
 #include "get_bits.h"
@@ -133,7 +136,8 @@ typedef struct APEPredictor {
 typedef struct APEContext {
     AVClass *class;                          ///< class for AVOptions
     AVCodecContext *avctx;
-    DSPContext dsp;
+    BswapDSPContext bdsp;
+    APEDSPContext adsp;
     int channels;
     int samples;                             ///< samples left to decode in current frame
     int bps;
@@ -193,8 +197,6 @@ static void predictor_decode_stereo_3930(APEContext *ctx, int count);
 static void predictor_decode_mono_3950(APEContext *ctx, int count);
 static void predictor_decode_stereo_3950(APEContext *ctx, int count);
 
-// TODO: dsputilize
-
 static av_cold int ape_decode_close(AVCodecContext *avctx)
 {
     APEContext *s = avctx->priv_data;
@@ -208,6 +210,19 @@ static av_cold int ape_decode_close(AVCodecContext *avctx)
     s->decoded_size = s->data_size = 0;
 
     return 0;
+}
+
+static int32_t scalarproduct_and_madd_int16_c(int16_t *v1, const int16_t *v2,
+                                              const int16_t *v3,
+                                              int order, int mul)
+{
+    int res = 0;
+
+    while (order--) {
+        res   += *v1 * *v2++;
+        *v1++ += mul * *v3++;
+    }
+    return res;
 }
 
 static av_cold int ape_decode_init(AVCodecContext *avctx)
@@ -290,7 +305,16 @@ static av_cold int ape_decode_init(AVCodecContext *avctx)
         s->predictor_decode_stereo = predictor_decode_stereo_3950;
     }
 
-    ff_dsputil_init(&s->dsp, avctx);
+    s->adsp.scalarproduct_and_madd_int16 = scalarproduct_and_madd_int16_c;
+
+    if (ARCH_ARM)
+        ff_apedsp_init_arm(&s->adsp);
+    if (ARCH_PPC)
+        ff_apedsp_init_ppc(&s->adsp);
+    if (ARCH_X86)
+        ff_apedsp_init_x86(&s->adsp);
+
+    ff_bswapdsp_init(&s->bdsp);
     avctx->channel_layout = (avctx->channels==2) ? AV_CH_LAYOUT_STEREO : AV_CH_LAYOUT_MONO;
 
     return 0;
@@ -911,10 +935,8 @@ static void long_filter_ehigh_3830(int32_t *buffer, int length)
 {
     int i, j;
     int32_t dotprod, sign;
-    int32_t coeffs[8], delay[8];
+    int32_t coeffs[8] = { 0 }, delay[8] = { 0 };
 
-    memset(coeffs, 0, sizeof(coeffs));
-    memset(delay,  0, sizeof(delay));
     for (i = 0; i < length; i++) {
         dotprod = 0;
         sign = APESIGN(buffer[i]);
@@ -1261,9 +1283,10 @@ static void do_apply_filter(APEContext *ctx, int version, APEFilter *f,
 
     while (count--) {
         /* round fixedpoint scalar product */
-        res = ctx->dsp.scalarproduct_and_madd_int16(f->coeffs, f->delay - order,
-                                                    f->adaptcoeffs - order,
-                                                    order, APESIGN(*data));
+        res = ctx->adsp.scalarproduct_and_madd_int16(f->coeffs,
+                                                     f->delay - order,
+                                                     f->adaptcoeffs - order,
+                                                     order, APESIGN(*data));
         res = (res + (1 << (fracbits - 1))) >> fracbits;
         res += *data;
         *data++ = res;
@@ -1429,7 +1452,8 @@ static int ape_decode_frame(AVCodecContext *avctx, void *data,
         av_fast_malloc(&s->data, &s->data_size, buf_size);
         if (!s->data)
             return AVERROR(ENOMEM);
-        s->dsp.bswap_buf((uint32_t*)s->data, (const uint32_t*)buf, buf_size >> 2);
+        s->bdsp.bswap_buf((uint32_t *) s->data, (const uint32_t *) buf,
+                          buf_size >> 2);
         memset(s->data + (buf_size & ~3), 0, buf_size & 3);
         s->ptr = s->data;
         s->data_end = s->data + buf_size;
@@ -1456,7 +1480,8 @@ static int ape_decode_frame(AVCodecContext *avctx, void *data,
         }
 
         if (!nblocks || nblocks > INT_MAX) {
-            av_log(avctx, AV_LOG_ERROR, "Invalid sample count: %u.\n", nblocks);
+            av_log(avctx, AV_LOG_ERROR, "Invalid sample count: %"PRIu32".\n",
+                   nblocks);
             return AVERROR_INVALIDDATA;
         }
         s->samples = nblocks;

@@ -1,69 +1,50 @@
 Release Notes
 =============
 
-* 9 "Plain Nine"
+* 11 "One Louder"
 
 General notes
 -------------
 
-From this release onwards, we have decided to drop the leading zero from our
-release numbers. There were no plans of ever changing it, so it carried no
-information. Thus this release is just a plain 9, the next will be 10 etc.
+With this release we are trying to answer the numerous calls from our users for
+shorter development cycles. From now on we will aim for approximately two major
+releases per year.
 
-A new library arrived in Libav during this development cycle -- its name is
-libavresample and it handles audio conversion and mixing. All users are
-encouraged to use it instead of the old, now deprecated, audio conversion
-API in libavcodec.
+Libav 11 is API-, but not ABI-compatible with the previous major release. This
+means that the code using our libraries needs to be rebuilt, but no source
+changes should be required. Note however, that a number of old APIs remain
+deprecated and will be dropped in the near future. All users are strongly
+encouraged to update their code as soon as possible. The doc/APIchanges file in
+the Libav source tree and the migration guide on the wiki should help with
+migration to the new APIs. If those are not sufficient, do not hesitate to
+contact us on IRC or through the user mailing list.
 
-The libpostproc library now resides in a separate tree. It was fully independent
-of the other Libav libraries, not used by any of the tools and saw very little
-development. For these reasons we decided that it has no place in Libav. A
-standalone Git tree is available at http://git.videolan.org/?p=libpostproc.git
-for people wishing to use libpostproc.
+One specific API issue in libavformat deserves mentioning here. When using
+libavcodec for decoding or encoding and libavformat for demuxing or muxing,
+the standard practice was to use the stream codec context (AVStream.codec) for
+actual decoding or encoding. There are multiple problems with this pattern
+(the main one is that the decoder/demuxer or encoder/muxer are not necessarily
+synchronized and may overwrite each other's state), so it is now strongly
+discouraged and will likely be deprecated in the future. Users should instead
+allocate a separate decoding or encoding context and populate it from the
+demuxing codec context (or the reverse for encoding) with the
+avcodec_copy_context() function.
 
-The major versions of the libavcodec, libavformat and libavfilter libraries have
-been bumped, so they are not API or ABI compatible with the 0.8 release. The
-ffmpeg transcoding tool, kept for compatibility in 0.8, has also been dropped.
+The main highlights of this release include native Opus, VP7, OpenEXR, and On2
+AVC decoders, HEVC encoding through libx265, new APIs for exporting ReplayGain
+and display transformation metadata and countless bug fixes. A large effort was
+also expended on internal cleanups which are not very visible to our users,
+but should make the codebase cleaner, safer and easier to maintain and extend.
+One point worth mentioning is refactoring the large monolithic framework for
+architecture-specific codec optimizations into small blocks, which reduces the
+size of configurations that selectively enable or disable certain codecs.
 
-This release brings a number of significant changes in the libavfilter library.
-Firstly, all the API dealing with filter internals is no longer public. The
-result is that creating user-side filters will not be supported until
-libavfilter is more mature.
-Secondly, full audio filtering support is now available along with a set of
-basic audio filters. We hope that their number will soon grow significantly.
-The avconv transcoding tool has of course been extended to handle audio
-filtering as well.
-There were a number of other API changes, most importantly the addition of
-the buffer sink public API.
+The avserver streaming tool, which has not been maintained for many years and
+was mostly broken, was removed from the tree. It was decided that it is a
+significant maintenance burden and that we do our users no service by pretending
+to support it, while we in fact do not.
 
-In the libavcodec library, one of the most notable changes is added support for
-planar audio (i.e. not interleaved). Many decoders and encoders, that previously
-did inefficient (de)interleaving internally, now only work with planar audio
-formats. Libavresample can be used for optimized conversion between interleaved
-and planar formats.
-
-Of big interest to our Windows users, Libav now supports building with the MSVC
-compiler. Since MSVC does not support C99 features used extensively by Libav,
-this has been accomplished using a converter that turns C99 code to C89. See the
-platform-specific documentation for more detailed documentation on building
-Libav with MSVC.
-
-As usual, this release also contains support for some new formats, many smaller
-new features and countless bug fixes. We can highlight Opus decoding / encoding
-through libopus, encoders for Apple ProRes and Ut Video, WMA Lossless and
-RealAudio Lossless decoders, fragmented MOV/MP4 and ISMV (Smooth Streaming)
-muxers, 24-bit FLAC encoding, a large number of RTMP improvements and support
-for cover art in ID3v2, WMA, MP4 and FLAC.
-
-See the Changelog file for a list of significant changes.
-
-Please note that our policy on bug reports has not changed. We still only accept
-bug reports against HEAD of the Libav trunk repository. If you are experiencing
-issues with any formally released version of Libav, please try a current version
-of the development code to check if the issue still exists. If it does, make
-your report against the development code following the usual bug reporting
-guidelines.
-
+See the Changelog file for a more extensive list of significant changes.
 
 API changes
 -----------
@@ -72,30 +53,23 @@ A number of additional APIs have been introduced and some existing functions
 have been deprecated and are scheduled for removal in the next release.
 Significant API changes include:
 
-[libavcodec]:
-* New video encoding API, similar to the previously introduced audio  encoding
-  API, which encodes from an AVFrame to an AVPacket, thus allowing it to
-  properly output timing information and side data.
+[libavcodec]
++  Added the avcodec_copy_context() function that must from now on be used for
+   freeing codec contexts.
++- Added a new VDA hardware acceleration API, since the old one was broken and
+   not fixable in a compatible way. Deprecated the old VDA API.
 
-* All CODEC_ID_* symbols now carry AV_ prefixes. Non-prefixed codec IDs are
-  deprecated.
+[libavformat]
++  Added support for exporting stream-global (as opposed to per-packet) side
+   data. This feature is now used by some demuxers to export ReplayGain or
+   display transformation matrix (aka rotation) or stereoscopic 3D mode.
++  Added an API for live metadata updates through event flags.
++- Changed the way to provide a hint about the desired timebase to muxers.
+   Previously it was done by setting AVStream.codec.time_base. Now callers
+   should set AVStream.time_base.
 
-* New codec descriptor API, which allows getting the properties of a given codec
-  (identified by its ID), without referring to a specific decoder or encoder.
-
-* An AVFrame must now be freed with a dedicated function, avcodec_free_frame().
-
-[libavutil]:
-* New audio FIFO API, which simplifies managing/merging/splitting audio buffers.
-
-* new int/float type punning API
-
-[libavfilter]:
-* All filter internals were hidden.
-
-* audio filtering.
-
-* new buffer sink API for getting frames out of libavfilter.
+[libavresample]
++ Added an API for working with AVFrames.
 
 Please see the file doc/APIchanges for details along with similar
 programmer-centric information.

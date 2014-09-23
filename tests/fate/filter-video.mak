@@ -24,6 +24,14 @@ fate-filter-fade: CMD = framecrc -c:v pgmyuv -i $(SRC) -vf fade=in:0:25,fade=out
 FATE_FILTER_VSYNTH-$(call ALLYES, INTERLACE_FILTER FIELDORDER_FILTER) += fate-filter-fieldorder
 fate-filter-fieldorder: CMD = framecrc -c:v pgmyuv -i $(SRC) -vf interlace=tff,fieldorder=bff -sws_flags +accurate_rnd+bitexact
 
+define FATE_FPFILTER_SUITE
+FATE_FILTER_VSYNTH-$(CONFIG_FRAMEPACK_FILTER) += fate-filter-framepack-$(1)
+fate-filter-framepack-$(1): CMD = framecrc -c:v pgmyuv -i $(TARGET_PATH)/tests/vsynth1/%02d.pgm -c:v pgmyuv -i $(TARGET_PATH)/tests/vsynth1/%02d.pgm -filter_complex framepack=$(1) -frames 15
+endef
+
+FPMODES = columns frameseq lines sbs tab
+$(foreach MODE,$(FPMODES),$(eval $(call FATE_FPFILTER_SUITE,$(MODE))))
+
 FATE_FILTER_VSYNTH-$(CONFIG_GRADFUN_FILTER) += fate-filter-gradfun
 fate-filter-gradfun: CMD = framecrc -c:v pgmyuv -i $(SRC) -vf gradfun
 
@@ -40,9 +48,21 @@ FATE_FILTER_VSYNTH-$(CONFIG_OVERLAY_FILTER) += fate-filter-overlay
 fate-filter-overlay: tests/data/filtergraphs/overlay
 fate-filter-overlay: CMD = framecrc -c:v pgmyuv -i $(SRC) -c:v pgmyuv -i $(SRC) -filter_complex_script $(TARGET_PATH)/tests/data/filtergraphs/overlay
 
+FATE_FILTER_VSYNTH-$(CONFIG_SELECT_FILTER) += fate-filter-select-alternate
+fate-filter-select-alternate: tests/data/filtergraphs/select-alternate
+fate-filter-select-alternate: CMD = framecrc -c:v pgmyuv -i $(SRC) -filter_script $(TARGET_PATH)/tests/data/filtergraphs/select-alternate
+
 FATE_FILTER_VSYNTH-$(call ALLYES, SETPTS_FILTER  SETTB_FILTER) += fate-filter-setpts
 fate-filter-setpts: tests/data/filtergraphs/setpts
 fate-filter-setpts: CMD = framecrc -c:v pgmyuv -i $(SRC) -filter_script $(TARGET_PATH)/tests/data/filtergraphs/setpts
+
+FATE_SHUFFLEPLANES += fate-filter-shuffleplanes-dup-luma
+fate-filter-shuffleplanes-dup-luma: CMD = framecrc -c:v pgmyuv -i $(SRC) -vf format=yuva444p,shuffleplanes=0:0:0:0
+
+FATE_SHUFFLEPLANES += fate-filter-shuffleplanes-swapuv
+fate-filter-shuffleplanes-swapuv: CMD = framecrc -c:v pgmyuv -i $(SRC) -vf shuffleplanes=0:2:1
+
+FATE_FILTER_VSYNTH-$(CONFIG_SHUFFLEPLANES_FILTER) += $(FATE_SHUFFLEPLANES)
 
 FATE_FILTER_VSYNTH-$(CONFIG_TRANSPOSE_FILTER) += fate-filter-transpose
 fate-filter-transpose: CMD = framecrc -c:v pgmyuv -i $(SRC) -vf transpose
@@ -96,8 +116,27 @@ FATE_FILTER_VSYNTH-$(CONFIG_VFLIP_FILTER) += fate-filter-vflip_vflip
 fate-filter-vflip_vflip: CMD = video_filter "vflip,vflip"
 
 
-FATE_FILTER_VSYNTH-$(CONFIG_FORMAT_FILTER) += fate-filter-pixdesc
-fate-filter-pixdesc: CMD = pixdesc
+tests/pixfmts.mak: TAG = GEN
+tests/pixfmts.mak: avconv$(EXESUF)
+	$(M)printf "PIXFMTS = " > $@
+	$(Q)$(TARGET_EXEC) $(TARGET_PATH)/$< -pix_fmts list 2> /dev/null | awk 'NR > 8 && /^IO/ { printf $$2 " " }' >> $@
+	$(Q)printf "\n" >> $@
+
+RUNNING_PIXFMTS_TESTS := $(filter check fate fate-list fate-filter fate-vfilter fate-filter-pixdesc%,$(MAKECMDGOALS))
+
+ifneq (,$(RUNNING_PIXFMTS_TESTS))
+-include tests/pixfmts.mak
+endif
+
+define PIXDESC_TEST
+FATE_FILTER_PIXDESC-$(CONFIG_FORMAT_FILTER) += fate-filter-pixdesc-$(1)
+fate-filter-pixdesc-$(1): CMD = video_filter "format=$(1),pixdesctest" -pix_fmt $(1)
+endef
+
+$(foreach fmt, $(PIXFMTS), $(eval $(call PIXDESC_TEST,$(fmt))))
+
+fate-filter-pixdesc: $(FATE_FILTER_PIXDESC-yes)
+FATE_FILTER_VSYNTH-yes += $(FATE_FILTER_PIXDESC-yes)
 
 
 FATE_FILTER_PIXFMTS += fate-filter-pixfmts-copy

@@ -663,7 +663,7 @@ static int nsv_read_packet(AVFormatContext *s, AVPacket *pkt)
     av_dlog(s, "%s()\n", __FUNCTION__);
 
     /* in case we don't already have something to eat ... */
-    if (nsv->ahead[0].data == NULL && nsv->ahead[1].data == NULL)
+    if (!nsv->ahead[0].data && !nsv->ahead[1].data)
         err = nsv_read_chunk(s, 0);
     if (err < 0)
         return err;
@@ -704,7 +704,6 @@ static int nsv_read_seek(AVFormatContext *s, int stream_index, int64_t timestamp
 
 static int nsv_read_close(AVFormatContext *s)
 {
-/*     int i; */
     NSVContext *nsv = s->priv_data;
 
     av_freep(&nsv->nsvs_file_offset);
@@ -713,20 +712,6 @@ static int nsv_read_close(AVFormatContext *s)
         av_free_packet(&nsv->ahead[0]);
     if (nsv->ahead[1].data)
         av_free_packet(&nsv->ahead[1]);
-
-#if 0
-
-    for(i=0;i<s->nb_streams;i++) {
-        AVStream *st = s->streams[i];
-        NSVStream *ast = st->priv_data;
-        if(ast){
-            av_free(ast->index_entries);
-            av_free(ast);
-        }
-        av_free(st->codec->palctrl);
-    }
-
-#endif
     return 0;
 }
 

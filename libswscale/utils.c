@@ -92,6 +92,7 @@ static const FormatEntry format_entries[AV_PIX_FMT_NB] = {
     [AV_PIX_FMT_YUVJ420P]    = { 1, 1 },
     [AV_PIX_FMT_YUVJ422P]    = { 1, 1 },
     [AV_PIX_FMT_YUVJ444P]    = { 1, 1 },
+    [AV_PIX_FMT_YVYU422]     = { 1, 1 },
     [AV_PIX_FMT_UYVY422]     = { 1, 1 },
     [AV_PIX_FMT_UYYVYY411]   = { 0, 0 },
     [AV_PIX_FMT_BGR8]        = { 1, 1 },
@@ -133,6 +134,8 @@ static const FormatEntry format_entries[AV_PIX_FMT_NB] = {
     [AV_PIX_FMT_YUVA444P16LE]= { 1, 1 },
     [AV_PIX_FMT_RGB48BE]     = { 1, 1 },
     [AV_PIX_FMT_RGB48LE]     = { 1, 1 },
+    [AV_PIX_FMT_RGBA64BE]    = { 0, 0, 1 },
+    [AV_PIX_FMT_RGBA64LE]    = { 0, 0, 1 },
     [AV_PIX_FMT_RGB565BE]    = { 1, 1 },
     [AV_PIX_FMT_RGB565LE]    = { 1, 1 },
     [AV_PIX_FMT_RGB555BE]    = { 1, 1 },
@@ -151,9 +154,13 @@ static const FormatEntry format_entries[AV_PIX_FMT_NB] = {
     [AV_PIX_FMT_RGB444BE]    = { 1, 1 },
     [AV_PIX_FMT_BGR444LE]    = { 1, 1 },
     [AV_PIX_FMT_BGR444BE]    = { 1, 1 },
-    [AV_PIX_FMT_Y400A]       = { 1, 0 },
+    [AV_PIX_FMT_YA8]         = { 1, 0 },
+    [AV_PIX_FMT_YA16BE]      = { 1, 0 },
+    [AV_PIX_FMT_YA16LE]      = { 1, 0 },
     [AV_PIX_FMT_BGR48BE]     = { 1, 1 },
     [AV_PIX_FMT_BGR48LE]     = { 1, 1 },
+    [AV_PIX_FMT_BGRA64BE]    = { 0, 0, 1 },
+    [AV_PIX_FMT_BGRA64LE]    = { 0, 0, 1 },
     [AV_PIX_FMT_YUV420P9BE]  = { 1, 1 },
     [AV_PIX_FMT_YUV420P9LE]  = { 1, 1 },
     [AV_PIX_FMT_YUV420P10BE] = { 1, 1 },
@@ -326,7 +333,7 @@ static av_cold int initFilter(int16_t **outFilter, int32_t **filterPos,
 
         xDstInSrc = xInc - 0x10000;
         for (i = 0; i < dstW; i++) {
-            int xx = (xDstInSrc - ((filterSize - 2) << 16)) / (1 << 17);
+            int xx = (xDstInSrc - ((int64_t)(filterSize - 2) << 16)) / (1 << 17);
             int j;
             (*filterPos)[i] = xx;
             for (j = 0; j < filterSize; j++) {
@@ -1311,7 +1318,6 @@ fail: // FIXME replace things by appropriate error codes
     return -1;
 }
 
-#if FF_API_SWS_GETCONTEXT
 SwsContext *sws_getContext(int srcW, int srcH, enum AVPixelFormat srcFormat,
                            int dstW, int dstH, enum AVPixelFormat dstFormat,
                            int flags, SwsFilter *srcFilter,
@@ -1347,7 +1353,6 @@ SwsContext *sws_getContext(int srcW, int srcH, enum AVPixelFormat srcFormat,
 
     return c;
 }
-#endif
 
 SwsFilter *sws_getDefaultFilter(float lumaGBlur, float chromaGBlur,
                                 float lumaSharpen, float chromaSharpen,

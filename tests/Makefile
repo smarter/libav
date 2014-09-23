@@ -1,3 +1,4 @@
+THREADS = 1
 VREF = tests/vsynth1/00.pgm
 AREF = tests/data/asynth1.sw
 
@@ -24,8 +25,10 @@ tests/data/filtergraphs/%: TAG = COPY
 tests/data/filtergraphs/%: $(SRC_PATH)/tests/filtergraphs/% | tests/data/filtergraphs
 	$(M)cp $< $@
 
+RUNNING_FATE := $(filter check fate%,$(filter-out fate-rsync,$(MAKECMDGOALS)))
+
 # Check sanity of dependencies when running FATE tests.
-ifneq (,$(filter check fate%,$(filter-out fate-rsync,$(MAKECMDGOALS))))
+ifneq (,$(RUNNING_FATE))
 CHKCFG  = $(if $($(1))$(!$(1)),$($(1)), $(error No such config: $(1)))
 endif
 
@@ -47,9 +50,11 @@ ENCMUX  = $(call ALLYES, $(1:%=%_ENCODER) $(2)_MUXER)
 
 DEMMUX  = $(call ALLYES, $(1)_DEMUXER $(2)_MUXER)
 
-FILTERDEMDEC       = $(call ALLYES, $(1)_FILTER $(2)_DEMUXER $(3)_DECODER)
-FILTERDEMDECMUX    = $(call ALLYES, $(1)_FILTER $(2)_DEMUXER $(3)_DECODER $(4)_MUXER)
-FILTERDEMDECENCMUX = $(call ALLYES, $(1)_FILTER $(2)_DEMUXER $(3)_DECODER $(4)_ENCODER $(5)_MUXER)
+FILTERDEMDEC       = $(call ALLYES, $(1:%=%_FILTER) $(2)_DEMUXER $(3)_DECODER)
+FILTERDEMDECMUX    = $(call ALLYES, $(1:%=%_FILTER) $(2)_DEMUXER $(3)_DECODER $(4)_MUXER)
+FILTERDEMDECENCMUX = $(call ALLYES, $(1:%=%_FILTER) $(2)_DEMUXER $(3)_DECODER $(4)_ENCODER $(5)_MUXER)
+
+PARSERDEMDEC       = $(call ALLYES, $(1)_PARSER $(2)_DEMUXER $(3)_DECODER)
 
 include $(SRC_PATH)/tests/fate/acodec.mak
 include $(SRC_PATH)/tests/fate/vcodec.mak
@@ -91,6 +96,7 @@ include $(SRC_PATH)/tests/fate/microsoft.mak
 include $(SRC_PATH)/tests/fate/monkeysaudio.mak
 include $(SRC_PATH)/tests/fate/mp3.mak
 include $(SRC_PATH)/tests/fate/mpc.mak
+include $(SRC_PATH)/tests/fate/opus.mak
 include $(SRC_PATH)/tests/fate/pcm.mak
 include $(SRC_PATH)/tests/fate/probe.mak
 include $(SRC_PATH)/tests/fate/prores.mak
@@ -106,6 +112,7 @@ include $(SRC_PATH)/tests/fate/vpx.mak
 include $(SRC_PATH)/tests/fate/vqf.mak
 include $(SRC_PATH)/tests/fate/wavpack.mak
 include $(SRC_PATH)/tests/fate/wma.mak
+include $(SRC_PATH)/tests/fate/xvid.mak
 
 FATE_AVCONV += $(FATE_AVCONV-yes)
 FATE-$(CONFIG_AVCONV) += $(FATE_AVCONV)
@@ -161,6 +168,7 @@ testclean:
 	$(RM) -r tests/vsynth1 tests/data
 	$(RM) $(CLEANSUFFIXES:%=tests/%)
 	$(RM) $(TESTTOOLS:%=tests/%$(HOSTEXESUF))
+	$(RM) tests/pixfmts.mak
 
 -include $(wildcard tests/*.d)
 

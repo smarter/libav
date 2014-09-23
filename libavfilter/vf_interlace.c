@@ -41,7 +41,7 @@ enum FieldType {
     FIELD_LOWER = 1,
 };
 
-typedef struct {
+typedef struct InterlaceContext {
     const AVClass *class;
     enum ScanMode scan;    // top or bottom field first scanning
     int lowpass;           // enable or disable low pass filterning
@@ -104,6 +104,11 @@ static int config_out_props(AVFilterLink *outlink)
         av_log(ctx, AV_LOG_ERROR, "input video height is too small\n");
         return AVERROR_INVALIDDATA;
     }
+
+    if (!s->lowpass)
+        av_log(ctx, AV_LOG_WARNING, "***warning*** Lowpass filter is disabled, "
+               "the resulting video will be aliased rather than interlaced.\n");
+
     // same input size
     outlink->w = inlink->w;
     outlink->h = inlink->h;
@@ -185,6 +190,8 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *buf)
         av_log(ctx, AV_LOG_WARNING,
                "video is already interlaced, adjusting framerate only\n");
         out = av_frame_clone(s->cur);
+        if (!out)
+            return AVERROR(ENOMEM);
         out->pts /= 2;  // adjust pts to new framerate
         ret = ff_filter_frame(outlink, out);
         s->got_output = 1;

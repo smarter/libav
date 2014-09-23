@@ -100,7 +100,6 @@ void av_register_all(void)
     REGISTER_DEMUXER (EA_CDATA,         ea_cdata);
     REGISTER_MUXDEMUX(EAC3,             eac3);
     REGISTER_MUXER   (F4V,              f4v);
-    REGISTER_MUXDEMUX(FFM,              ffm);
     REGISTER_MUXDEMUX(FFMETADATA,       ffmetadata);
     REGISTER_MUXDEMUX(FILMSTRIP,        filmstrip);
     REGISTER_MUXDEMUX(FLAC,             flac);
@@ -118,7 +117,7 @@ void av_register_all(void)
     REGISTER_MUXDEMUX(H263,             h263);
     REGISTER_MUXDEMUX(H264,             h264);
     REGISTER_MUXER   (HDS,              hds);
-    REGISTER_DEMUXER (HEVC,             hevc);
+    REGISTER_MUXDEMUX(HEVC,             hevc);
     REGISTER_MUXDEMUX(HLS,              hls);
     REGISTER_DEMUXER (HNM,              hnm);
     REGISTER_DEMUXER (IDCIN,            idcin);
@@ -165,6 +164,7 @@ void av_register_all(void)
     REGISTER_MUXER   (MPJPEG,           mpjpeg);
     REGISTER_DEMUXER (MSNWC_TCP,        msnwc_tcp);
     REGISTER_DEMUXER (MTV,              mtv);
+    REGISTER_DEMUXER (MV,               mv);
     REGISTER_DEMUXER (MVI,              mvi);
     REGISTER_MUXDEMUX(MXF,              mxf);
     REGISTER_MUXER   (MXF_D10,          mxf_d10);
@@ -174,8 +174,11 @@ void av_register_all(void)
     REGISTER_MUXER   (NULL,             null);
     REGISTER_MUXDEMUX(NUT,              nut);
     REGISTER_DEMUXER (NUV,              nuv);
+    REGISTER_MUXER   (OGA,              oga);
     REGISTER_MUXDEMUX(OGG,              ogg);
     REGISTER_MUXDEMUX(OMA,              oma);
+    REGISTER_MUXER   (OPUS,             opus);
+    REGISTER_DEMUXER (PAF,              paf);
     REGISTER_MUXDEMUX(PCM_ALAW,         pcm_alaw);
     REGISTER_MUXDEMUX(PCM_MULAW,        pcm_mulaw);
     REGISTER_MUXDEMUX(PCM_F64BE,        pcm_f64be);
@@ -222,8 +225,10 @@ void av_register_all(void)
     REGISTER_DEMUXER (SMACKER,          smacker);
     REGISTER_MUXDEMUX(SMJPEG,           smjpeg);
     REGISTER_MUXER   (SMOOTHSTREAMING,  smoothstreaming);
+    REGISTER_DEMUXER (SMUSH,            smush);
     REGISTER_DEMUXER (SOL,              sol);
     REGISTER_MUXDEMUX(SOX,              sox);
+    REGISTER_MUXER   (SPX,              spx);
     REGISTER_MUXDEMUX(SPDIF,            spdif);
     REGISTER_MUXDEMUX(SRT,              srt);
     REGISTER_DEMUXER (STR,              str);
@@ -268,6 +273,7 @@ void av_register_all(void)
     REGISTER_PROTOCOL(HTTP,             http);
     REGISTER_PROTOCOL(HTTPPROXY,        httpproxy);
     REGISTER_PROTOCOL(HTTPS,            https);
+    REGISTER_PROTOCOL(ICECAST,          icecast);
     REGISTER_PROTOCOL(MMSH,             mmsh);
     REGISTER_PROTOCOL(MMST,             mmst);
     REGISTER_PROTOCOL(MD5,              md5);

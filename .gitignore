@@ -3,6 +3,7 @@
 *.d
 *.def
 *.dll
+*.dylib
 *.exe
 *.exp
 *.gcda
@@ -14,6 +15,7 @@
 *.pdb
 *.so
 *.so.*
+*.swp
 *.ver
 *-example
 *-test
@@ -22,7 +24,6 @@
 /avconv
 /avplay
 /avprobe
-/avserver
 /config.*
 /coverage.info
 /version.h
@@ -32,6 +33,11 @@
 /doc/avoptions_codec.texi
 /doc/avoptions_format.texi
 /doc/doxy/html/
+/doc/examples/avcodec
+/doc/examples/filter_audio
+/doc/examples/metadata
+/doc/examples/output
+/doc/examples/transcode_aac
 /doc/print_options
 /lcov/
 /libavcodec/*_tablegen
@@ -41,6 +47,7 @@
 /tests/audiogen
 /tests/base64
 /tests/data/
+/tests/pixfmts.mak
 /tests/rotozoom
 /tests/tiny_psnr
 /tests/videogen

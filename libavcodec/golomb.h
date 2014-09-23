@@ -138,7 +138,7 @@ static inline unsigned svq3_get_ue_golomb(GetBitContext *gb)
             ret = (ret << 4) | ff_interleaved_dirac_golomb_vlc_code[buf];
             UPDATE_CACHE(re, gb);
             buf = GET_CACHE(re, gb);
-        } while (HAVE_BITS_REMAINING(re, gb));
+        } while (BITS_AVAILABLE(re, gb));
 
         CLOSE_READER(re, gb);
         return ret - 1;
@@ -204,6 +204,18 @@ static inline int get_se_golomb(GetBitContext *gb)
 
         return buf;
     }
+}
+
+static inline int get_se_golomb_long(GetBitContext *gb)
+{
+    unsigned int buf = get_ue_golomb_long(gb);
+
+    if (buf & 1)
+        buf = (buf + 1) >> 1;
+    else
+        buf = -(buf >> 1);
+
+    return buf;
 }
 
 static inline int svq3_get_se_golomb(GetBitContext *gb)
@@ -316,7 +328,7 @@ static inline int get_ur_golomb_jpegls(GetBitContext *gb, int k, int limit,
         return buf;
     } else {
         int i;
-        for (i = 0; i < limit && SHOW_UBITS(re, gb, 1) == 0 && HAVE_BITS_REMAINING(re, gb); i++) {
+        for (i = 0; i < limit && SHOW_UBITS(re, gb, 1) == 0 && BITS_AVAILABLE(re, gb); i++) {
             LAST_SKIP_BITS(re, gb, 1);
             UPDATE_CACHE(re, gb);
         }

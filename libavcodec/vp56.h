@@ -26,7 +26,6 @@
 #ifndef AVCODEC_VP56_H
 #define AVCODEC_VP56_H
 
-#include "dsputil.h"
 #include "get_bits.h"
 #include "hpeldsp.h"
 #include "bytestream.h"
@@ -300,7 +299,7 @@ static av_always_inline int vp8_rac_get(VP56RangeCoder *c)
     return vp56_rac_get_prob(c, 128);
 }
 
-static av_unused int vp56_rac_gets(VP56RangeCoder *c, int bits)
+static int vp56_rac_gets(VP56RangeCoder *c, int bits)
 {
     int value = 0;
 
@@ -311,7 +310,7 @@ static av_unused int vp56_rac_gets(VP56RangeCoder *c, int bits)
     return value;
 }
 
-static av_unused int vp8_rac_get_uint(VP56RangeCoder *c, int bits)
+static int vp8_rac_get_uint(VP56RangeCoder *c, int bits)
 {
     int value = 0;
 

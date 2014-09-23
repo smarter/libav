@@ -157,6 +157,9 @@ fate-interplay-mve-16bit: CMD = framecrc -i $(TARGET_SAMPLES)/interplay-mve/desc
 FATE_SAMPLES_AVCONV-$(call DEMDEC, MXF, JPEG2000) += fate-jpeg2000-dcinema
 fate-jpeg2000-dcinema: CMD = framecrc -flags +bitexact -i $(TARGET_SAMPLES)/jpeg2000/chiens_dcinema2K.mxf -pix_fmt xyz12le
 
+FATE_SAMPLES_AVCONV-$(call DEMDEC, JV, JV) += fate-jv
+fate-jv: CMD = framecrc -i $(TARGET_SAMPLES)/jv/intro.jv -an -pix_fmt rgb24
+
 FATE_SAMPLES_AVCONV-$(call DEMDEC, AVI, KGV1) += fate-kgv1
 fate-kgv1: CMD = framecrc -i $(TARGET_SAMPLES)/kega/kgv1.avi -pix_fmt rgb555le -an
 
@@ -173,13 +176,22 @@ FATE_SAMPLES_AVCONV-$(call DEMDEC, MSNWC_TCP, MIMIC) += fate-mimic
 fate-mimic: CMD = framecrc -idct simple -i $(TARGET_SAMPLES)/mimic/mimic2-womanloveffmpeg.cam
 
 FATE_SAMPLES_AVCONV-$(call DEMDEC, MOV, MJPEGB) += fate-mjpegb
-fate-mjpegb: CMD = framecrc -idct simple -flags +bitexact -i $(TARGET_SAMPLES)/mjpegb/mjpegb_part.mov -an
+fate-mjpegb: CMD = framecrc -idct simple -fflags +bitexact -i $(TARGET_SAMPLES)/mjpegb/mjpegb_part.mov -an
 
 FATE_SAMPLES_AVCONV-$(call DEMDEC, MVI, MOTIONPIXELS) += fate-motionpixels
 fate-motionpixels: CMD = framecrc -i $(TARGET_SAMPLES)/motion-pixels/INTRO-partial.MVI -an -pix_fmt rgb24 -vframes 111
 
 FATE_SAMPLES_AVCONV-$(call DEMDEC, MPEGTS, MPEG2VIDEO) += fate-mpeg2-field-enc
 fate-mpeg2-field-enc: CMD = framecrc -flags +bitexact -idct simple -i $(TARGET_SAMPLES)/mpeg2/mpeg2_field_encoding.ts -an -vframes 30
+
+FATE_SAMPLES_AVCONV-$(call DEMDEC, MV, MVC1) += fate-mv-mvc1
+fate-mv-mvc1: CMD = framecrc -i $(TARGET_SAMPLES)/mv/posture.mv -an -frames 25 -pix_fmt rgb555le
+
+FATE_SAMPLES_AVCONV-$(call DEMDEC, MV, MVC2) += fate-mv-mvc2
+fate-mv-mvc2: CMD = framecrc -i $(TARGET_SAMPLES)/mv/12345.mv -an -frames 30 -pix_fmt bgra
+
+FATE_SAMPLES_AVCONV-$(call DEMDEC, MV, SGIRLE) += fate-mv-sgirle
+fate-mv-sgirle: CMD = framecrc -i $(TARGET_SAMPLES)/mv/pet-rle.movie -an
 
 # FIXME dropped frames in this test because of coarse timebase
 FATE_NUV += fate-nuv-rtjpeg
@@ -190,6 +202,9 @@ fate-nuv-rtjpeg-fh: CMD = framecrc -idct simple -i $(TARGET_SAMPLES)/nuv/rtjpeg_
 
 FATE_SAMPLES_AVCONV-$(call DEMDEC, NUV, NUV) += $(FATE_NUV)
 fate-nuv: $(FATE_NUV)
+
+FATE_SAMPLES_AVCONV-$(call DEMDEC, PAF, PAF_VIDEO) += fate-paf-video
+fate-paf-video: CMD = framecrc -i $(TARGET_SAMPLES)/paf/hod1-partial.paf -pix_fmt rgb24 -an
 
 FATE_SAMPLES_AVCONV-$(call DEMDEC, AVI, QPEG) += fate-qpeg
 fate-qpeg: CMD = framecrc -i $(TARGET_SAMPLES)/qpeg/Clock.avi -an -pix_fmt rgb24
@@ -202,6 +217,9 @@ fate-rl2: CMD = framecrc -i $(TARGET_SAMPLES)/rl2/Z4915300.RL2 -pix_fmt rgb24 -a
 
 FATE_SAMPLES_AVCONV-$(call DEMDEC, ROQ, ROQ) += fate-roqvideo
 fate-roqvideo: CMD = framecrc -i $(TARGET_SAMPLES)/idroq/idlogo.roq -an
+
+FATE_SAMPLES_AVCONV-$(call DEMDEC, SMUSH, SANM) += fate-sanm
+fate-sanm: CMD = framecrc -i $(TARGET_SAMPLES)/smush/ronin_part.znm -an -pix_fmt rgb24
 
 FATE_SAMPLES_AVCONV-$(call DEMDEC, VMD, VMDVIDEO) += fate-sierra-vmd-video
 fate-sierra-vmd-video: CMD = framecrc -i $(TARGET_SAMPLES)/vmd/12.vmd -pix_fmt rgb24 -an
@@ -247,7 +265,7 @@ fate-v410dec: CMD = framecrc -i $(TARGET_SAMPLES)/v410/lenav410.mov -pix_fmt yuv
 
 FATE_SAMPLES_AVCONV-$(call ENCDEC, V410 PGMYUV, AVI IMAGE2) += fate-v410enc
 fate-v410enc: $(VREF)
-fate-v410enc: CMD = md5 -f image2 -vcodec pgmyuv -i $(TARGET_PATH)/tests/vsynth1/%02d.pgm -flags +bitexact -vcodec v410 -f avi
+fate-v410enc: CMD = md5 -f image2 -vcodec pgmyuv -i $(TARGET_PATH)/tests/vsynth1/%02d.pgm -fflags +bitexact -vcodec v410 -f avi
 
 FATE_SAMPLES_AVCONV-$(call DEMDEC, SIFF, VB) += fate-vb
 fate-vb: CMD = framecrc -i $(TARGET_SAMPLES)/SIFF/INTRO_B.VB -t 3 -pix_fmt rgb24 -an

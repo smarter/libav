@@ -358,8 +358,11 @@ static inline int parse_command_line(AVFormatContext *s, const char *line,
                                      enum RTSPMethod *methodcode)
 {
     RTSPState *rt = s->priv_data;
-    const char *linept, *searchlinept;
-    linept = strchr(line, ' ');
+    const char *searchlinept;
+    const char *linept = strchr(line, ' ');
+    if (!linept)
+        return AVERROR_INVALIDDATA;
+
     if (linept - line > methodsize - 1) {
         av_log(s, AV_LOG_ERROR, "Method string too long\n");
         return AVERROR(EIO);
@@ -408,7 +411,7 @@ static inline int parse_command_line(AVFormatContext *s, const char *line,
     }
 
     searchlinept = strchr(linept, ' ');
-    if (searchlinept == NULL) {
+    if (!searchlinept) {
         av_log(s, AV_LOG_ERROR, "Error parsing message URI\n");
         return AVERROR_INVALIDDATA;
     }
@@ -877,7 +880,7 @@ retry:
                  rt->get_parameter_supported)) {
                 ff_rtsp_send_cmd_async(s, "GET_PARAMETER", rt->control_uri, NULL);
             } else {
-                ff_rtsp_send_cmd_async(s, "OPTIONS", "*", NULL);
+                ff_rtsp_send_cmd_async(s, "OPTIONS", rt->control_uri, NULL);
             }
             /* The stale flag should be reset when creating the auth response in
              * ff_rtsp_send_cmd_async, but reset it here just in case we never

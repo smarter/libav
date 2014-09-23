@@ -18,9 +18,9 @@
  * License along with Libav; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
+
 #include "avcodec.h"
 #include "get_bits.h"
-#include "dsputil.h"
 #include "internal.h"
 
 #include "libavutil/attributes.h"
@@ -35,7 +35,7 @@ typedef struct DVDSubContext {
 
 static void yuv_a_to_rgba(const uint8_t *ycbcr, const uint8_t *alpha, uint32_t *rgba, int num_values)
 {
-    const uint8_t *cm = ff_cropTbl + MAX_NEG_CROP;
+    const uint8_t *cm = ff_crop_tab + MAX_NEG_CROP;
     uint8_t r, g, b;
     int i, y, cb, cr;
     int r_add, g_add, b_add;
@@ -314,7 +314,7 @@ static int decode_dvd_subtitles(DVDSubContext *ctx, AVSubtitle *sub_header,
             if (h < 0)
                 h = 0;
             if (w > 0 && h > 0) {
-                if (sub_header->rects != NULL) {
+                if (sub_header->rects) {
                     for (i = 0; i < sub_header->num_rects; i++) {
                         av_freep(&sub_header->rects[i]->pict.data[0]);
                         av_freep(&sub_header->rects[i]->pict.data[1]);
@@ -360,7 +360,7 @@ static int decode_dvd_subtitles(DVDSubContext *ctx, AVSubtitle *sub_header,
     if (sub_header->num_rects > 0)
         return is_menu;
  fail:
-    if (sub_header->rects != NULL) {
+    if (!sub_header->rects) {
         for (i = 0; i < sub_header->num_rects; i++) {
             av_freep(&sub_header->rects[i]->pict.data[0]);
             av_freep(&sub_header->rects[i]->pict.data[1]);
@@ -391,7 +391,7 @@ static int find_smallest_bounding_rectangle(AVSubtitle *s)
     int y1, y2, x1, x2, y, w, h, i;
     uint8_t *bitmap;
 
-    if (s->num_rects == 0 || s->rects == NULL || s->rects[0]->w <= 0 || s->rects[0]->h <= 0)
+    if (s->num_rects == 0 || !s->rects || s->rects[0]->w <= 0 || s->rects[0]->h <= 0)
         return 0;
 
     for(i = 0; i < s->rects[0]->nb_colors; i++) {
@@ -503,6 +503,7 @@ static av_cold int dvdsub_init(AVCodecContext *avctx)
 {
     DVDSubContext *ctx = avctx->priv_data;
     char *data, *cur;
+    int ret = 0;
 
     if (!avctx->extradata || !avctx->extradata_size)
         return 0;
@@ -527,16 +528,18 @@ static av_cold int dvdsub_init(AVCodecContext *avctx)
         } else if (!strncmp("size:", cur, 5)) {
             int w, h;
             if (sscanf(cur + 5, "%dx%d", &w, &h) == 2) {
-               int ret = ff_set_dimensions(avctx, w, h);
+               ret = ff_set_dimensions(avctx, w, h);
                if (ret < 0)
-                   return ret;
+                   goto fail;
             }
         }
         cur += strcspn(cur, "\n\r");
         cur += strspn(cur, "\n\r");
     }
+
+fail:
     av_free(data);
-    return 0;
+    return ret;
 }
 
 AVCodec ff_dvdsub_decoder = {

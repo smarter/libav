@@ -17,24 +17,86 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
+/**
+ * @file
+ * @ingroup lavu_frame
+ * reference-counted frame API
+ */
+
 #ifndef AVUTIL_FRAME_H
 #define AVUTIL_FRAME_H
 
 #include <stdint.h>
-
-#include "libavcodec/version.h"
 
 #include "avutil.h"
 #include "buffer.h"
 #include "dict.h"
 #include "rational.h"
 #include "samplefmt.h"
+#include "pixfmt.h"
+#include "version.h"
+
+
+/**
+ * @defgroup lavu_frame AVFrame
+ * @ingroup lavu_data
+ *
+ * @{
+ * AVFrame is an abstraction for reference-counted raw multimedia data.
+ */
 
 enum AVFrameSideDataType {
     /**
      * The data is the AVPanScan struct defined in libavcodec.
      */
     AV_FRAME_DATA_PANSCAN,
+    /**
+     * ATSC A53 Part 4 Closed Captions.
+     * A53 CC bitstream is stored as uint8_t in AVFrameSideData.data.
+     * The number of bytes of CC data is AVFrameSideData.size.
+     */
+    AV_FRAME_DATA_A53_CC,
+    /**
+     * Stereoscopic 3d metadata.
+     * The data is the AVStereo3D struct defined in libavutil/stereo3d.h.
+     */
+    AV_FRAME_DATA_STEREO3D,
+    /**
+     * The data is the AVMatrixEncoding enum defined in libavutil/channel_layout.h.
+     */
+    AV_FRAME_DATA_MATRIXENCODING,
+    /**
+     * Metadata relevant to a downmix procedure.
+     * The data is the AVDownmixInfo struct defined in libavutil/downmix_info.h.
+     */
+    AV_FRAME_DATA_DOWNMIX_INFO,
+    /**
+     * ReplayGain information in the form of the AVReplayGain struct.
+     */
+    AV_FRAME_DATA_REPLAYGAIN,
+    /**
+     * This side data contains a 3x3 transformation matrix describing an affine
+     * transformation that needs to be applied to the frame for correct
+     * presentation.
+     *
+     * See libavutil/display.h for a detailed description of the data.
+     */
+    AV_FRAME_DATA_DISPLAYMATRIX,
+    /**
+     * Active Format Description data consisting of a single byte as specified
+     * in ETSI TS 101 154 using enum AVActiveFormatDescription.
+     */
+    AV_FRAME_DATA_AFD,
+};
+
+enum AVActiveFormatDescription {
+    AV_AFD_SAME         = 8,
+    AV_AFD_4_3          = 9,
+    AV_AFD_16_9         = 10,
+    AV_AFD_14_9         = 11,
+    AV_AFD_4_3_SP_14_9  = 13,
+    AV_AFD_16_9_SP_14_9 = 14,
+    AV_AFD_SP_4_3       = 15,
 };
 
 typedef struct AVFrameSideData {
@@ -47,7 +109,7 @@ typedef struct AVFrameSideData {
 /**
  * This structure describes decoded (raw) audio or video data.
  *
- * AVFrame must be allocated using av_frame_alloc(). Not that this only
+ * AVFrame must be allocated using av_frame_alloc(). Note that this only
  * allocates the AVFrame itself, the buffers for the data must be managed
  * through other means (see below).
  * AVFrame must be freed with av_frame_free().
@@ -352,14 +414,34 @@ typedef struct AVFrame {
     int            nb_side_data;
 
 /**
+ * @defgroup lavu_frame_flags AV_FRAME_FLAGS
+ * Flags describing additional frame properties.
+ *
+ * @{
+ */
+
+/**
  * The frame data may be corrupted, e.g. due to decoding errors.
  */
 #define AV_FRAME_FLAG_CORRUPT       (1 << 0)
+/**
+ * @}
+ */
 
     /**
-     * Frame flags, a combination of AV_FRAME_FLAG_*
+     * Frame flags, a combination of @ref lavu_frame_flags
      */
     int flags;
+
+    enum AVColorRange color_range;
+
+    enum AVColorPrimaries color_primaries;
+
+    enum AVColorTransferCharacteristic color_trc;
+
+    enum AVColorSpace colorspace;
+
+    enum AVChromaLocation chroma_location;
 } AVFrame;
 
 /**
@@ -384,7 +466,7 @@ AVFrame *av_frame_alloc(void);
 void av_frame_free(AVFrame **frame);
 
 /**
- * Setup a new reference to the data described by an given frame.
+ * Set up a new reference to the data described by the source frame.
  *
  * Copy frame properties from src to dst and create a new reference for each
  * AVBufferRef from src.
@@ -462,6 +544,19 @@ int av_frame_is_writable(AVFrame *frame);
 int av_frame_make_writable(AVFrame *frame);
 
 /**
+ * Copy the frame data from src to dst.
+ *
+ * This function does not allocate anything, dst must be already initialized and
+ * allocated with the same parameters as src.
+ *
+ * This function only copies the frame data (i.e. the contents of the data /
+ * extended data arrays), not any other properties.
+ *
+ * @return >= 0 on success, a negative AVERROR on error.
+ */
+int av_frame_copy(AVFrame *dst, const AVFrame *src);
+
+/**
  * Copy only "metadata" fields from src to dst.
  *
  * Metadata for the purpose of this function are those fields that do not affect
@@ -500,5 +595,15 @@ AVFrameSideData *av_frame_new_side_data(AVFrame *frame,
  */
 AVFrameSideData *av_frame_get_side_data(const AVFrame *frame,
                                         enum AVFrameSideDataType type);
+
+/**
+ * If side data of the supplied type exists in the frame, free it and remove it
+ * from the frame.
+ */
+void av_frame_remove_side_data(AVFrame *frame, enum AVFrameSideDataType type);
+
+/**
+ * @}
+ */
 
 #endif /* AVUTIL_FRAME_H */

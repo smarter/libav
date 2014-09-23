@@ -26,8 +26,9 @@
  */
 
 #include "avcodec.h"
-#include "put_bits.h"
 #include "lzw.h"
+#include "mathops.h"
+#include "put_bits.h"
 
 #define LZW_MAXBITS 12
 #define LZW_SIZTABLE (1<<LZW_MAXBITS)
@@ -128,7 +129,7 @@ static inline int findCode(LZWEncodeState * s, uint8_t c, int hash_prefix)
     int h = hash(FFMAX(hash_prefix, 0), c);
     int hash_offset = hashOffset(h);
 
-    while (s->tab[h].hash_prefix != LZW_PREFIX_FREE) {
+    while (h >= 0 && s->tab[h].hash_prefix != LZW_PREFIX_FREE) {
         if ((s->tab[h].suffix == c)
             && (s->tab[h].hash_prefix == hash_prefix))
             return h;

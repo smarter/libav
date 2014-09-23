@@ -29,7 +29,9 @@
 #include "get_bits.h"
 #include "golomb.h"
 #include "h264chroma.h"
+#include "idctdsp.h"
 #include "mathops.h"
+#include "qpeldsp.h"
 #include "cavs.h"
 
 static const uint8_t alpha_tab[64] = {
@@ -275,7 +277,7 @@ static void intra_pred_plane(uint8_t *d, uint8_t *top, uint8_t *left, int stride
     int x, y, ia;
     int ih = 0;
     int iv = 0;
-    const uint8_t *cm = ff_cropTbl + MAX_NEG_CROP;
+    const uint8_t *cm = ff_crop_tab + MAX_NEG_CROP;
 
     for (x = 0; x < 4; x++) {
         ih += (x + 1) *  (top[5 + x] -  top[3 - x]);
@@ -408,7 +410,8 @@ static inline void mc_dir_part(AVSContext *h, AVFrame *pic, int chroma_height,
         full_mx + 16 /* FIXME */ > pic_width + extra_width ||
         full_my + 16 /* FIXME */ > pic_height + extra_height) {
         h->vdsp.emulated_edge_mc(h->edge_emu_buffer,
-                                 src_y - 2 - 2 * h->l_stride, h->l_stride,
+                                 src_y - 2 - 2 * h->l_stride,
+                                 h->l_stride, h->l_stride,
                                  16 + 5, 16 + 5 /* FIXME */,
                                  full_mx - 2, full_my - 2,
                                  pic_width, pic_height);
@@ -421,7 +424,7 @@ static inline void mc_dir_part(AVSContext *h, AVFrame *pic, int chroma_height,
 
     if (emu) {
         h->vdsp.emulated_edge_mc(h->edge_emu_buffer, src_cb,
-                                 h->c_stride,
+                                 h->c_stride, h->c_stride,
                                  9, 9 /* FIXME */,
                                  mx >> 3, my >> 3,
                                  pic_width >> 1, pic_height >> 1);
@@ -431,7 +434,7 @@ static inline void mc_dir_part(AVSContext *h, AVFrame *pic, int chroma_height,
 
     if (emu) {
         h->vdsp.emulated_edge_mc(h->edge_emu_buffer, src_cr,
-                                 h->c_stride,
+                                 h->c_stride, h->c_stride,
                                  9, 9 /* FIXME */,
                                  mx >> 3, my >> 3,
                                  pic_width >> 1, pic_height >> 1);
@@ -757,13 +760,14 @@ av_cold int ff_cavs_init(AVCodecContext *avctx)
 {
     AVSContext *h = avctx->priv_data;
 
-    ff_dsputil_init(&h->dsp, avctx);
+    ff_blockdsp_init(&h->bdsp, avctx);
     ff_h264chroma_init(&h->h264chroma, 8);
+    ff_idctdsp_init(&h->idsp, avctx);
     ff_videodsp_init(&h->vdsp, 8);
     ff_cavsdsp_init(&h->cdsp, avctx);
-    ff_init_scantable_permutation(h->dsp.idct_permutation,
+    ff_init_scantable_permutation(h->idsp.idct_permutation,
                                   h->cdsp.idct_perm);
-    ff_init_scantable(h->dsp.idct_permutation, &h->scantable, ff_zigzag_direct);
+    ff_init_scantable(h->idsp.idct_permutation, &h->scantable, ff_zigzag_direct);
 
     h->avctx       = avctx;
     avctx->pix_fmt = AV_PIX_FMT_YUV420P;

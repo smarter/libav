@@ -23,6 +23,8 @@
 #include <inttypes.h>
 #include <math.h>
 #include <limits.h>
+#include <stdint.h>
+
 #include "libavutil/avstring.h"
 #include "libavutil/colorspace.h"
 #include "libavutil/mathematics.h"
@@ -252,7 +254,7 @@ static enum AVDiscard skip_idct        = AVDISCARD_DEFAULT;
 static enum AVDiscard skip_loop_filter = AVDISCARD_DEFAULT;
 static int error_concealment = 3;
 static int decoder_reorder_pts = -1;
-static int autoexit;
+static int noautoexit;
 static int exit_on_keydown;
 static int exit_on_mousedown;
 static int loop = 1;
@@ -1321,6 +1323,8 @@ static int queue_picture(VideoState *is, AVFrame *src_frame, double pts, int64_t
 
     vp = &is->pictq[is->pictq_windex];
 
+    vp->sar = src_frame->sample_aspect_ratio;
+
     /* alloc or resize hardware picture buffer */
     if (!vp->bmp || vp->reallocate ||
 #if CONFIG_AVFILTER
@@ -1384,7 +1388,7 @@ static int queue_picture(VideoState *is, AVFrame *src_frame, double pts, int64_t
         is->img_convert_ctx = sws_getCachedContext(is->img_convert_ctx,
             vp->width, vp->height, vp->pix_fmt, vp->width, vp->height,
             dst_pix_fmt, sws_flags, NULL, NULL, NULL);
-        if (is->img_convert_ctx == NULL) {
+        if (!is->img_convert_ctx) {
             fprintf(stderr, "Cannot initialize the conversion context\n");
             exit(1);
         }
@@ -1842,10 +1846,9 @@ static int audio_decode_frame(VideoState *is, double *pts_ptr)
             int resample_changed, audio_resample;
 
             if (!is->frame) {
-                if (!(is->frame = avcodec_alloc_frame()))
+                if (!(is->frame = av_frame_alloc()))
                     return AVERROR(ENOMEM);
-            } else
-                avcodec_get_frame_defaults(is->frame);
+            }
 
             if (flush_complete)
                 break;
@@ -2027,6 +2030,7 @@ static int stream_component_open(VideoState *is, int stream_index)
     SDL_AudioSpec wanted_spec, spec;
     AVDictionary *opts;
     AVDictionaryEntry *t = NULL;
+    int ret = 0;
 
     if (stream_index < 0 || stream_index >= ic->nb_streams)
         return -1;
@@ -2049,11 +2053,13 @@ static int stream_component_open(VideoState *is, int stream_index)
     if (avctx->codec_type == AVMEDIA_TYPE_VIDEO)
         av_dict_set(&opts, "refcounted_frames", "1", 0);
     if (!codec ||
-        avcodec_open2(avctx, codec, &opts) < 0)
-        return -1;
+        (ret = avcodec_open2(avctx, codec, &opts)) < 0) {
+        goto fail;
+    }
     if ((t = av_dict_get(opts, "", NULL, AV_DICT_IGNORE_SUFFIX))) {
         av_log(NULL, AV_LOG_ERROR, "Option %s not found.\n", t->key);
-        return AVERROR_OPTION_NOT_FOUND;
+        ret =  AVERROR_OPTION_NOT_FOUND;
+        goto fail;
     }
 
     /* prepare audio output */
@@ -2064,7 +2070,8 @@ static int stream_component_open(VideoState *is, int stream_index)
             avctx->channel_layout = av_get_default_channel_layout(avctx->channels);
         if (!avctx->channel_layout) {
             fprintf(stderr, "unable to guess channel layout\n");
-            return -1;
+            ret = AVERROR_INVALIDDATA;
+            goto fail;
         }
         if (avctx->channels == 1)
             is->sdl_channel_layout = AV_CH_LAYOUT_MONO;
@@ -2081,7 +2088,8 @@ static int stream_component_open(VideoState *is, int stream_index)
         wanted_spec.userdata = is;
         if (SDL_OpenAudio(&wanted_spec, &spec) < 0) {
             fprintf(stderr, "SDL_OpenAudio: %s\n", SDL_GetError());
-            return -1;
+            ret = AVERROR_UNKNOWN;
+            goto fail;
         }
         is->audio_hw_buf_size = spec.size;
         is->sdl_sample_fmt          = AV_SAMPLE_FMT_S16;
@@ -2126,7 +2134,11 @@ static int stream_component_open(VideoState *is, int stream_index)
     default:
         break;
     }
-    return 0;
+
+fail:
+    av_dict_free(&opts);
+
+    return ret;
 }
 
 static void stream_component_close(VideoState *is, int stream_index)
@@ -2150,7 +2162,7 @@ static void stream_component_close(VideoState *is, int stream_index)
             avresample_free(&is->avr);
         av_freep(&is->audio_buf1);
         is->audio_buf = NULL;
-        avcodec_free_frame(&is->frame);
+        av_frame_free(&is->frame);
 
         if (is->rdft) {
             av_rdft_end(is->rdft);
@@ -2263,14 +2275,16 @@ static int decode_thread(void *arg)
     orig_nb_streams = ic->nb_streams;
 
     err = avformat_find_stream_info(ic, opts);
+
+    for (i = 0; i < orig_nb_streams; i++)
+        av_dict_free(&opts[i]);
+    av_freep(&opts);
+
     if (err < 0) {
         fprintf(stderr, "%s: could not find codec parameters\n", is->filename);
         ret = -1;
         goto fail;
     }
-    for (i = 0; i < orig_nb_streams; i++)
-        av_dict_free(&opts[i]);
-    av_freep(&opts);
 
     if (ic->pb)
         ic->pb->eof_reached = 0; // FIXME hack, avplay maybe should not use url_feof() to test for the end
@@ -2418,7 +2432,7 @@ static int decode_thread(void *arg)
             if (is->audioq.size + is->videoq.size + is->subtitleq.size == 0) {
                 if (loop != 1 && (!loop || --loop)) {
                     stream_seek(cur_stream, start_time != AV_NOPTS_VALUE ? start_time : 0, 0, 0);
-                } else if (autoexit) {
+                } else if (!noautoexit) {
                     ret = AVERROR_EOF;
                     goto fail;
                 }
@@ -2600,6 +2614,33 @@ static void toggle_audio_display(void)
     }
 }
 
+static void seek_chapter(VideoState *is, int incr)
+{
+    int64_t pos = get_master_clock(is) * AV_TIME_BASE;
+    int i;
+
+    if (!is->ic->nb_chapters)
+        return;
+
+    /* find the current chapter */
+    for (i = 0; i < is->ic->nb_chapters; i++) {
+        AVChapter *ch = is->ic->chapters[i];
+        if (av_compare_ts(pos, AV_TIME_BASE_Q, ch->start, ch->time_base) < 0) {
+            i--;
+            break;
+        }
+    }
+
+    i += incr;
+    i = FFMAX(i, 0);
+    if (i >= is->ic->nb_chapters)
+        return;
+
+    av_log(NULL, AV_LOG_VERBOSE, "Seeking to chapter %d.\n", i);
+    stream_seek(is, av_rescale_q(is->ic->chapters[i]->start, is->ic->chapters[i]->time_base,
+                                 AV_TIME_BASE_Q), 0, 0);
+}
+
 /* handle an event sent by the GUI */
 static void event_loop(void)
 {
@@ -2644,6 +2685,12 @@ static void event_loop(void)
                 break;
             case SDLK_w:
                 toggle_audio_display();
+                break;
+            case SDLK_PAGEUP:
+                seek_chapter(cur_stream, 1);
+                break;
+            case SDLK_PAGEDOWN:
+                seek_chapter(cur_stream, -1);
                 break;
             case SDLK_LEFT:
                 incr = -10.0;
@@ -2838,7 +2885,7 @@ static const OptionDef options[] = {
     { "idct", OPT_INT | HAS_ARG | OPT_EXPERT, { &idct }, "set idct algo",  "algo" },
     { "ec", OPT_INT | HAS_ARG | OPT_EXPERT, { &error_concealment }, "set error concealment options",  "bit_mask" },
     { "sync", HAS_ARG | OPT_EXPERT, { .func_arg = opt_sync }, "set audio-video sync. type (type=audio/video/ext)", "type" },
-    { "autoexit", OPT_BOOL | OPT_EXPERT, { &autoexit }, "exit at the end", "" },
+    { "noautoexit", OPT_BOOL | OPT_EXPERT, { &noautoexit }, "Do not exit at the end of playback", "" },
     { "exitonkeydown", OPT_BOOL | OPT_EXPERT, { &exit_on_keydown }, "exit on key down", "" },
     { "exitonmousedown", OPT_BOOL | OPT_EXPERT, { &exit_on_mousedown }, "exit on mouse down", "" },
     { "loop", OPT_INT | HAS_ARG | OPT_EXPERT, { &loop }, "set number of times the playback shall be looped", "loop count" },

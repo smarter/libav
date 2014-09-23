@@ -22,6 +22,7 @@
  */
 
 #include <float.h>
+#include <stdint.h>
 
 #include "libavutil/common.h"
 #include "libavutil/fifo.h"
@@ -102,7 +103,7 @@ static av_cold void uninit(AVFilterContext *ctx)
 {
     FPSContext *s = ctx->priv;
     if (s->fifo) {
-        s->drop += av_fifo_size(s->fifo) / sizeof(AVFilterBufferRef*);
+        s->drop += av_fifo_size(s->fifo) / sizeof(AVFrame*);
         flush_fifo(s->fifo);
         av_fifo_free(s->fifo);
     }

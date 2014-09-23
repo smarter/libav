@@ -20,6 +20,7 @@
  */
 
 #include <string.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <errno.h>
 #include <math.h>
@@ -57,7 +58,7 @@
 struct SwsContext *sws_opts;
 AVDictionary *format_opts, *codec_opts, *resample_opts;
 
-static const int this_year = 2013;
+static const int this_year = 2014;
 
 void init_opts(void)
 {
@@ -175,7 +176,7 @@ static const OptionDef *find_option(const OptionDef *po, const char *name)
     const char *p = strchr(name, ':');
     int len = p ? p - name : strlen(name);
 
-    while (po->name != NULL) {
+    while (po->name) {
         if (!strncmp(name, po->name, len) && strlen(po->name) == len)
             break;
         po++;
@@ -224,7 +225,7 @@ static void prepare_app_arguments(int *argc_ptr, char ***argv_ptr)
 
     win32_argv_utf8 = av_mallocz(sizeof(char *) * (win32_argc + 1) + buffsize);
     argstr_flat     = (char *)win32_argv_utf8 + sizeof(char *) * (win32_argc + 1);
-    if (win32_argv_utf8 == NULL) {
+    if (!win32_argv_utf8) {
         LocalFree(argv_w);
         return;
     }
@@ -919,7 +920,7 @@ int show_formats(void *optctx, const char *opt, const char *arg)
         const char *long_name = NULL;
 
         while ((ofmt = av_oformat_next(ofmt))) {
-            if ((name == NULL || strcmp(ofmt->name, name) < 0) &&
+            if ((!name || strcmp(ofmt->name, name) < 0) &&
                 strcmp(ofmt->name, last_name) > 0) {
                 name      = ofmt->name;
                 long_name = ofmt->long_name;
@@ -927,7 +928,7 @@ int show_formats(void *optctx, const char *opt, const char *arg)
             }
         }
         while ((ifmt = av_iformat_next(ifmt))) {
-            if ((name == NULL || strcmp(ifmt->name, name) < 0) &&
+            if ((!name || strcmp(ifmt->name, name) < 0) &&
                 strcmp(ifmt->name, last_name) > 0) {
                 name      = ifmt->name;
                 long_name = ifmt->long_name;
@@ -936,7 +937,7 @@ int show_formats(void *optctx, const char *opt, const char *arg)
             if (name && strcmp(ifmt->name, name) == 0)
                 decode = 1;
         }
-        if (name == NULL)
+        if (!name)
             break;
         last_name = name;
 
@@ -1160,12 +1161,14 @@ int show_protocols(void *optctx, const char *opt, const char *arg)
 
 int show_filters(void *optctx, const char *opt, const char *arg)
 {
-    const AVFilter av_unused(*filter) = NULL;
+#if CONFIG_AVFILTER
+    const AVFilter *filter = NULL;
 
     printf("Filters:\n");
-#if CONFIG_AVFILTER
     while ((filter = avfilter_next(filter)))
         printf("%-16s %s\n", filter->name, filter->description);
+#else
+    printf("No filters available: libavfilter disabled\n");
 #endif
     return 0;
 }
@@ -1529,6 +1532,35 @@ int check_stream_specifier(AVFormatContext *s, AVStream *st, const char *spec)
                     return 1;
         }
         return 0;
+    } else if (*spec == 'i' && *(spec + 1) == ':') {
+        int stream_id;
+        char *endptr;
+        spec += 2;
+        stream_id = strtol(spec, &endptr, 0);
+        return stream_id == st->id;
+    } else if (*spec == 'm' && *(spec + 1) == ':') {
+        AVDictionaryEntry *tag;
+        char *key, *val;
+        int ret;
+
+        spec += 2;
+        val = strchr(spec, ':');
+
+        key = val ? av_strndup(spec, val - spec) : av_strdup(spec);
+        if (!key)
+            return AVERROR(ENOMEM);
+
+        tag = av_dict_get(st->metadata, key, NULL, 0);
+        if (tag) {
+            if (!val || !strcmp(tag->value, val + 1))
+                ret = 1;
+            else
+                ret = 0;
+        } else
+            ret = 0;
+
+        av_freep(&key);
+        return ret;
     } else if (!*spec) /* empty specifier, matches everything */
         return 1;
 

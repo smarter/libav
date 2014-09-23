@@ -23,8 +23,9 @@
 #define AVCODEC_CAVS_H
 
 #include "cavsdsp.h"
-#include "dsputil.h"
+#include "blockdsp.h"
 #include "h264chroma.h"
+#include "idctdsp.h"
 #include "get_bits.h"
 #include "videodsp.h"
 
@@ -161,8 +162,9 @@ typedef struct AVSFrame {
 
 typedef struct AVSContext {
     AVCodecContext *avctx;
-    DSPContext       dsp;
+    BlockDSPContext bdsp;
     H264ChromaContext h264chroma;
+    IDCTDSPContext idsp;
     VideoDSPContext vdsp;
     CAVSDSPContext  cdsp;
     GetBitContext gb;

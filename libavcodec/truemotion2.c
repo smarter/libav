@@ -24,10 +24,12 @@
  * Duck TrueMotion2 decoder.
  */
 
+#include <inttypes.h>
+
 #include "avcodec.h"
+#include "bswapdsp.h"
 #include "bytestream.h"
 #include "get_bits.h"
-#include "dsputil.h"
 #include "internal.h"
 
 #define TM2_ESCAPE 0x80000000
@@ -58,10 +60,10 @@ enum TM2_BLOCKS {
 
 typedef struct TM2Context {
     AVCodecContext *avctx;
-    AVFrame pic;
+    AVFrame *pic;
 
     GetBitContext gb;
-    DSPContext dsp;
+    BswapDSPContext bdsp;
 
     /* TM2 streams */
     int *tokens[TM2_NUM_STREAMS];
@@ -231,7 +233,8 @@ static inline int tm2_read_header(TM2Context *ctx, const uint8_t *buf)
     case TM2_NEW_HEADER_MAGIC:
         return 0;
     default:
-        av_log(ctx->avctx, AV_LOG_ERROR, "Not a TM2 header: 0x%08X\n", magic);
+        av_log(ctx->avctx, AV_LOG_ERROR, "Not a TM2 header: 0x%08"PRIX32"\n",
+               magic);
         return AVERROR_INVALIDDATA;
     }
 }
@@ -838,7 +841,7 @@ static int decode_frame(AVCodecContext *avctx,
     TM2Context * const l = avctx->priv_data;
     const uint8_t *buf   = avpkt->data;
     int buf_size         = avpkt->size & ~3;
-    AVFrame * const p    = &l->pic;
+    AVFrame * const p    = l->pic;
     int offset           = TM2_HEADER_SIZE;
     int i, t, ret;
     uint8_t *swbuf;
@@ -855,7 +858,8 @@ static int decode_frame(AVCodecContext *avctx,
         return ret;
     }
 
-    l->dsp.bswap_buf((uint32_t*)swbuf, (const uint32_t*)buf, buf_size >> 2);
+    l->bdsp.bswap_buf((uint32_t *) swbuf, (const uint32_t *) buf,
+                      buf_size >> 2);
 
     if ((ret = tm2_read_header(l, swbuf)) < 0) {
         av_free(swbuf);
@@ -883,7 +887,7 @@ static int decode_frame(AVCodecContext *avctx,
 
     l->cur = !l->cur;
     *got_frame      = 1;
-    ret = av_frame_ref(data, &l->pic);
+    ret = av_frame_ref(data, l->pic);
     av_free(swbuf);
 
     return (ret < 0) ? ret : buf_size;
@@ -900,10 +904,13 @@ static av_cold int decode_init(AVCodecContext *avctx)
     }
 
     l->avctx       = avctx;
-    avcodec_get_frame_defaults(&l->pic);
     avctx->pix_fmt = AV_PIX_FMT_BGR24;
 
-    ff_dsputil_init(&l->dsp, avctx);
+    l->pic = av_frame_alloc();
+    if (!l->pic)
+        return AVERROR(ENOMEM);
+
+    ff_bswapdsp_init(&l->bdsp);
 
     l->last  = av_malloc(4 * sizeof(*l->last)  * (w >> 2));
     l->clast = av_malloc(4 * sizeof(*l->clast) * (w >> 2));
@@ -952,7 +959,6 @@ static av_cold int decode_init(AVCodecContext *avctx)
 static av_cold int decode_end(AVCodecContext *avctx)
 {
     TM2Context * const l = avctx->priv_data;
-    AVFrame *pic = &l->pic;
     int i;
 
     av_free(l->last);
@@ -968,7 +974,7 @@ static av_cold int decode_end(AVCodecContext *avctx)
         av_free(l->V2_base);
     }
 
-    av_frame_unref(pic);
+    av_frame_free(&l->pic);
 
     return 0;
 }

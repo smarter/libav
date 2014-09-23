@@ -25,7 +25,7 @@ $(SUBDIR)%-test.i: $(SUBDIR)%.c
 $(SUBDIR)x86/%.o: $(SUBDIR)x86/%.asm
 	$(DEPYASM) $(YASMFLAGS) -I $(<D)/ -M -o $@ $< > $(@:.o=.d)
 	$(YASM) $(YASMFLAGS) -I $(<D)/ -o $@ $<
-	-$(STRIP) -wN '..@*' $@
+	-$(STRIP) $(STRIPFLAGS) $@
 
 LIBOBJS := $(OBJS) $(SUBDIR)%.h.o $(TESTOBJS)
 $(LIBOBJS) $(LIBOBJS:.o=.i):   CPPFLAGS += -DHAVE_AV_CONFIG_H
@@ -42,11 +42,11 @@ install-libs-$(CONFIG_STATIC): install-lib$(NAME)-static
 install-libs-$(CONFIG_SHARED): install-lib$(NAME)-shared
 
 define RULES
-$(EXAMPLES) $(TOOLS): THISLIB = $(FULLNAME:%=$(LD_LIB))
-$(TESTPROGS):         THISLIB = $(SUBDIR)$(LIBNAME)
+$(TOOLS):     THISLIB = $(FULLNAME:%=$(LD_LIB))
+$(TESTPROGS): THISLIB = $(SUBDIR)$(LIBNAME)
 
-$(EXAMPLES) $(TESTPROGS) $(TOOLS): %$(EXESUF): %.o $(EXEOBJS)
-	$$(LD) $(LDFLAGS) $$(LD_O) $$(filter %.o,$$^) $$(THISLIB) $(FFEXTRALIBS) $$(ELIBS)
+$(TESTPROGS) $(TOOLS): %$(EXESUF): %.o $(EXEOBJS)
+	$$(LD) $(LDFLAGS) $(LDEXEFLAGS) $$(LD_O) $$(filter %.o,$$^) $$(THISLIB) $(FFEXTRALIBS) $$(ELIBS)
 
 $(SUBDIR)$(SLIBNAME): $(SUBDIR)$(SLIBNAME_WITH_MAJOR)
 	$(Q)cd ./$(SUBDIR) && $(LN_S) $(SLIBNAME_WITH_MAJOR) $(SLIBNAME)
@@ -57,7 +57,7 @@ $(SUBDIR)$(SLIBNAME_WITH_MAJOR): $(OBJS) $(SUBDIR)lib$(NAME).ver $(DEP_LIBS)
 	$(SLIB_EXTRA_CMD)
 
 clean::
-	$(RM) $(addprefix $(SUBDIR),*-example$(EXESUF) *-test$(EXESUF) $(CLEANFILES) $(CLEANSUFFIXES) $(LIBSUFFIXES)) \
+	$(RM) $(addprefix $(SUBDIR),*-test$(EXESUF) $(CLEANFILES) $(CLEANSUFFIXES) $(LIBSUFFIXES)) \
 	    $(CLEANSUFFIXES:%=$(SUBDIR)$(ARCH)/%)
 
 distclean:: clean
@@ -100,8 +100,7 @@ endef
 
 $(eval $(RULES))
 
-$(EXAMPLES) $(TOOLS): $(DEP_LIBS) $(SUBDIR)$($(CONFIG_SHARED:yes=S)LIBNAME)
-$(TESTPROGS):         $(DEP_LIBS) $(SUBDIR)$(LIBNAME)
+$(TOOLS):     $(DEP_LIBS) $(SUBDIR)$($(CONFIG_SHARED:yes=S)LIBNAME)
+$(TESTPROGS): $(DEP_LIBS) $(SUBDIR)$(LIBNAME)
 
-examples: $(EXAMPLES)
 testprogs: $(TESTPROGS)

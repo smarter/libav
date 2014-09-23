@@ -30,6 +30,7 @@
 
 #include "avcodec.h"
 #include "internal.h"
+#include "libvpx.h"
 #include "libavutil/base64.h"
 #include "libavutil/common.h"
 #include "libavutil/mathematics.h"
@@ -158,7 +159,7 @@ static void coded_frame_add(void *list, struct FrameListData *cx_frame)
 {
     struct FrameListData **p = list;
 
-    while (*p != NULL)
+    while (*p)
         p = &(*p)->next;
     *p = cx_frame;
     cx_frame->next = NULL;
@@ -353,7 +354,7 @@ static av_cold int vpx_init(AVCodecContext *avctx,
     vpx_img_wrap(&ctx->rawimg, VPX_IMG_FMT_I420, avctx->width, avctx->height, 1,
                  (unsigned char*)1);
 
-    avctx->coded_frame = avcodec_alloc_frame();
+    avctx->coded_frame = av_frame_alloc();
     if (!avctx->coded_frame) {
         av_log(avctx, AV_LOG_ERROR, "Error allocating coded frame\n");
         vp8_free(avctx);
@@ -467,11 +468,13 @@ static int queue_frames(AVCodecContext *avctx, AVPacket *pkt_out,
             break;
         case VPX_CODEC_STATS_PKT: {
             struct vpx_fixed_buf *stats = &ctx->twopass_stats;
-            stats->buf = av_realloc(stats->buf,
-                                    stats->sz + pkt->data.twopass_stats.sz);
-            if (!stats->buf) {
+            int err;
+            if ((err = av_reallocp(&stats->buf,
+                                   stats->sz +
+                                   pkt->data.twopass_stats.sz)) < 0) {
+                stats->sz = 0;
                 av_log(avctx, AV_LOG_ERROR, "Stat buffer realloc failed\n");
-                return AVERROR(ENOMEM);
+                return err;
             }
             memcpy((uint8_t*)stats->buf + stats->sz,
                    pkt->data.twopass_stats.buf, pkt->data.twopass_stats.sz);
@@ -538,7 +541,7 @@ static int vp8_encode(AVCodecContext *avctx, AVPacket *pkt,
 #define OFFSET(x) offsetof(VP8Context, x)
 #define VE AV_OPT_FLAG_VIDEO_PARAM | AV_OPT_FLAG_ENCODING_PARAM
 static const AVOption options[] = {
-    { "cpu-used",        "Quality/Speed ratio modifier",           OFFSET(cpu_used),        AV_OPT_TYPE_INT, {.i64 = INT_MIN}, INT_MIN, INT_MAX, VE},
+    { "cpu-used",        "Quality/Speed ratio modifier",           OFFSET(cpu_used),        AV_OPT_TYPE_INT, {.i64 = 1}, INT_MIN, INT_MAX, VE},
     { "auto-alt-ref",    "Enable use of alternate reference "
                          "frames (2-pass only)",                   OFFSET(auto_alt_ref),    AV_OPT_TYPE_INT, {.i64 = -1},      -1,      1,       VE},
     { "lag-in-frames",   "Number of frames to look ahead for "
@@ -605,6 +608,9 @@ AVCodec ff_libvpx_vp8_encoder = {
 #if CONFIG_LIBVPX_VP9_ENCODER
 static av_cold int vp9_init(AVCodecContext *avctx)
 {
+    int ret;
+    if ((ret = ff_vp9_check_experimental(avctx)))
+        return ret;
     return vpx_init(avctx, &vpx_codec_vp9_cx_algo);
 }
 
@@ -624,7 +630,7 @@ AVCodec ff_libvpx_vp9_encoder = {
     .init           = vp9_init,
     .encode2        = vp8_encode,
     .close          = vp8_free,
-    .capabilities   = CODEC_CAP_DELAY | CODEC_CAP_AUTO_THREADS | CODEC_CAP_EXPERIMENTAL,
+    .capabilities   = CODEC_CAP_DELAY | CODEC_CAP_AUTO_THREADS,
     .pix_fmts       = (const enum AVPixelFormat[]){ AV_PIX_FMT_YUV420P, AV_PIX_FMT_NONE },
     .priv_class     = &class_vp9,
     .defaults       = defaults,

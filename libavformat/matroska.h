@@ -86,6 +86,7 @@
 #define MATROSKA_ID_CODECINFOURL 0x3B4040
 #define MATROSKA_ID_CODECDOWNLOADURL 0x26B240
 #define MATROSKA_ID_CODECDECODEALL 0xAA
+#define MATROSKA_ID_CODECDELAY 0x56AA
 #define MATROSKA_ID_TRACKNAME  0x536E
 #define MATROSKA_ID_TRACKLANGUAGE 0x22B59C
 #define MATROSKA_ID_TRACKFLAGENABLED 0xB9
@@ -236,6 +237,7 @@ typedef enum {
   MATROSKA_VIDEO_STEREOMODE_TYPE_ANAGLYPH_GREEN_MAG = 12,
   MATROSKA_VIDEO_STEREOMODE_TYPE_BOTH_EYES_BLOCK_LR = 13,
   MATROSKA_VIDEO_STEREOMODE_TYPE_BOTH_EYES_BLOCK_RL = 14,
+  MATROSKA_VIDEO_STEREOMODE_TYPE_NB,
 } MatroskaVideoStereoModeType;
 
 /*
@@ -253,5 +255,7 @@ typedef struct CodecTags{
 extern const CodecTags ff_mkv_codec_tags[];
 extern const CodecMime ff_mkv_mime_tags[];
 extern const AVMetadataConv ff_mkv_metadata_conv[];
+
+int ff_mkv_stereo3d_conv(AVStream *st, MatroskaVideoStereoModeType stereo_mode);
 
 #endif /* AVFORMAT_MATROSKA_H */

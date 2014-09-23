@@ -23,6 +23,7 @@
 #include <X11/extensions/XvMC.h>
 
 #include "avcodec.h"
+#include "mpegutils.h"
 #include "mpegvideo.h"
 
 #undef NDEBUG
@@ -43,7 +44,7 @@
  */
 void ff_xvmc_init_block(MpegEncContext *s)
 {
-    struct xvmc_pix_fmt *render = (struct xvmc_pix_fmt*)s->current_picture.f.data[2];
+    struct xvmc_pix_fmt *render = (struct xvmc_pix_fmt*)s->current_picture.f->data[2];
     assert(render && render->xvmc_id == AV_XVMC_ID);
 
     s->block = (int16_t (*)[64])(render->data_blocks + render->next_free_data_block_num * 64);
@@ -75,7 +76,7 @@ void ff_xvmc_pack_pblocks(MpegEncContext *s, int cbp)
  */
 int ff_xvmc_field_start(MpegEncContext *s, AVCodecContext *avctx)
 {
-    struct xvmc_pix_fmt *last, *next, *render = (struct xvmc_pix_fmt*)s->current_picture.f.data[2];
+    struct xvmc_pix_fmt *last, *next, *render = (struct xvmc_pix_fmt*)s->current_picture.f->data[2];
     const int mb_block_count = 4 + (1 << s->chroma_format);
 
     assert(avctx);
@@ -115,7 +116,7 @@ int ff_xvmc_field_start(MpegEncContext *s, AVCodecContext *avctx)
         case  AV_PICTURE_TYPE_I:
             return 0; // no prediction from other frames
         case  AV_PICTURE_TYPE_B:
-            next = (struct xvmc_pix_fmt*)s->next_picture.f.data[2];
+            next = (struct xvmc_pix_fmt*)s->next_picture.f->data[2];
             if (!next)
                 return -1;
             if (next->xvmc_id != AV_XVMC_ID)
@@ -123,7 +124,7 @@ int ff_xvmc_field_start(MpegEncContext *s, AVCodecContext *avctx)
             render->p_future_surface = next->p_surface;
             // no return here, going to set forward prediction
         case  AV_PICTURE_TYPE_P:
-            last = (struct xvmc_pix_fmt*)s->last_picture.f.data[2];
+            last = (struct xvmc_pix_fmt*)s->last_picture.f->data[2];
             if (!last)
                 last = render; // predict second field from the first
             if (last->xvmc_id != AV_XVMC_ID)
@@ -143,7 +144,7 @@ return -1;
  */
 void ff_xvmc_field_end(MpegEncContext *s)
 {
-    struct xvmc_pix_fmt *render = (struct xvmc_pix_fmt*)s->current_picture.f.data[2];
+    struct xvmc_pix_fmt *render = (struct xvmc_pix_fmt*)s->current_picture.f->data[2];
     assert(render);
 
     if (render->filled_mv_blocks_num > 0)
@@ -168,7 +169,7 @@ void ff_xvmc_decode_mb(MpegEncContext *s)
         return;
     }
 
-    // from MPV_decode_mb(), update DC predictors for P macroblocks
+    // from ff_mpv_decode_mb(), update DC predictors for P macroblocks
     if (!s->mb_intra) {
         s->last_dc[0] =
         s->last_dc[1] =
@@ -184,7 +185,7 @@ void ff_xvmc_decode_mb(MpegEncContext *s)
     s->current_picture.qscale_table[mb_xy] = s->qscale;
 
     // start of XVMC-specific code
-    render = (struct xvmc_pix_fmt*)s->current_picture.f.data[2];
+    render = (struct xvmc_pix_fmt*)s->current_picture.f->data[2];
     assert(render);
     assert(render->xvmc_id == AV_XVMC_ID);
     assert(render->mv_blocks);
@@ -306,7 +307,7 @@ void ff_xvmc_decode_mb(MpegEncContext *s)
             if (s->mb_intra && (render->idct || !render->unsigned_intra))
                 *s->pblocks[i][0] -= 1 << 10;
             if (!render->idct) {
-                s->dsp.idct(*s->pblocks[i]);
+                s->idsp.idct(*s->pblocks[i]);
                 /* It is unclear if MC hardware requires pixel diff values to be
                  * in the range [-255;255]. TODO: Clipping if such hardware is
                  * ever found. As of now it would only be an unnecessary

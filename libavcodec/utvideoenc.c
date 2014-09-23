@@ -28,9 +28,10 @@
 #include "libavutil/intreadwrite.h"
 #include "avcodec.h"
 #include "internal.h"
+#include "bswapdsp.h"
 #include "bytestream.h"
 #include "put_bits.h"
-#include "dsputil.h"
+#include "huffyuvencdsp.h"
 #include "mathops.h"
 #include "utvideo.h"
 #include "huffman.h"
@@ -58,7 +59,7 @@ static av_cold int utvideo_encode_close(AVCodecContext *avctx)
 static av_cold int utvideo_encode_init(AVCodecContext *avctx)
 {
     UtvideoContext *c = avctx->priv_data;
-    int i;
+    int i, subsampled_height;
     uint32_t original_format;
 
     c->avctx           = avctx;
@@ -83,7 +84,10 @@ static av_cold int utvideo_encode_init(AVCodecContext *avctx)
             return AVERROR_INVALIDDATA;
         }
         c->planes        = 3;
-        avctx->codec_tag = MKTAG('U', 'L', 'Y', '0');
+        if (avctx->colorspace == AVCOL_SPC_BT709)
+            avctx->codec_tag = MKTAG('U', 'L', 'H', '0');
+        else
+            avctx->codec_tag = MKTAG('U', 'L', 'Y', '0');
         original_format  = UTVIDEO_420;
         break;
     case AV_PIX_FMT_YUV422P:
@@ -93,7 +97,10 @@ static av_cold int utvideo_encode_init(AVCodecContext *avctx)
             return AVERROR_INVALIDDATA;
         }
         c->planes        = 3;
-        avctx->codec_tag = MKTAG('U', 'L', 'Y', '2');
+        if (avctx->colorspace == AVCOL_SPC_BT709)
+            avctx->codec_tag = MKTAG('U', 'L', 'H', '2');
+        else
+            avctx->codec_tag = MKTAG('U', 'L', 'Y', '2');
         original_format  = UTVIDEO_422;
         break;
     default:
@@ -102,7 +109,8 @@ static av_cold int utvideo_encode_init(AVCodecContext *avctx)
         return AVERROR_INVALIDDATA;
     }
 
-    ff_dsputil_init(&c->dsp, avctx);
+    ff_bswapdsp_init(&c->bdsp);
+    ff_huffyuvencdsp_init(&c->hdsp);
 
     /* Check the prediction method, and error out if unsupported */
     if (avctx->prediction_method < 0 || avctx->prediction_method > 4) {
@@ -126,7 +134,27 @@ static av_cold int utvideo_encode_init(AVCodecContext *avctx)
         return AVERROR_OPTION_NOT_FOUND;
     }
 
-    avctx->coded_frame = avcodec_alloc_frame();
+    /*
+     * Check the asked slice count for obviously invalid
+     * values (> 256 or negative).
+     */
+    if (avctx->slices > 256 || avctx->slices < 0) {
+        av_log(avctx, AV_LOG_ERROR,
+               "Slice count %d is not supported in Ut Video (theoretical range is 0-256).\n",
+               avctx->slices);
+        return AVERROR(EINVAL);
+    }
+
+    /* Check that the slice count is not larger than the subsampled height */
+    subsampled_height = avctx->height >> av_pix_fmt_desc_get(avctx->pix_fmt)->log2_chroma_h;
+    if (avctx->slices > subsampled_height) {
+        av_log(avctx, AV_LOG_ERROR,
+               "Slice count %d is larger than the subsampling-applied height %d.\n",
+               avctx->slices, subsampled_height);
+        return AVERROR(EINVAL);
+    }
+
+    avctx->coded_frame = av_frame_alloc();
 
     if (!avctx->coded_frame) {
         av_log(avctx, AV_LOG_ERROR, "Could not allocate frame.\n");
@@ -175,9 +203,19 @@ static av_cold int utvideo_encode_init(AVCodecContext *avctx)
 
     /*
      * Set how many slices are going to be used.
-     * Set one slice for now.
+     * By default uses multiple slices depending on the subsampled height.
+     * This enables multithreading in the official decoder.
      */
-    c->slices = 1;
+    if (!avctx->slices) {
+        c->slices = subsampled_height / 120;
+
+        if (!c->slices)
+            c->slices = 1;
+        else if (c->slices > 256)
+            c->slices = 256;
+    } else {
+        c->slices = avctx->slices;
+    }
 
     /* Set compression mode */
     c->compression = COMP_HUFF;
@@ -276,7 +314,7 @@ static void median_predict(UtvideoContext *c, uint8_t *src, uint8_t *dst, int st
 
     /* Rest of the coded part uses median prediction */
     for (j = 1; j < height; j++) {
-        c->dsp.sub_hfyu_median_prediction(dst, src - stride, src, width, &A, &B);
+        c->hdsp.sub_hfyu_median_pred(dst, src - stride, src, width, &A, &B);
         dst += width;
         src += stride;
     }
@@ -462,9 +500,9 @@ static int encode_plane(AVCodecContext *avctx, uint8_t *src,
         slice_len = offset - slice_len;
 
         /* Byteswap the written huffman codes */
-        c->dsp.bswap_buf((uint32_t *) c->slice_bits,
-                         (uint32_t *) c->slice_bits,
-                         slice_len >> 2);
+        c->bdsp.bswap_buf((uint32_t *) c->slice_bits,
+                          (uint32_t *) c->slice_bits,
+                          slice_len >> 2);
 
         /* Write the offset to the stream */
         bytestream2_put_le32(pb, offset);

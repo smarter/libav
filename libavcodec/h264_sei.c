@@ -25,12 +25,10 @@
  * @author Michael Niedermayer <michaelni@gmx.at>
  */
 
-#include "internal.h"
 #include "avcodec.h"
-#include "h264.h"
 #include "golomb.h"
-
-#include <assert.h>
+#include "h264.h"
+#include "internal.h"
 
 static const uint8_t sei_num_clock_ts_table[9] = {
     1, 1, 1, 2, 2, 3, 3, 2, 3
@@ -42,6 +40,8 @@ void ff_h264_reset_sei(H264Context *h)
     h->sei_dpb_output_delay         =  0;
     h->sei_cpb_removal_delay        = -1;
     h->sei_buffering_period_present =  0;
+    h->sei_frame_packing_present    =  0;
+    h->sei_display_orientation_present = 0;
 }
 
 static int decode_picture_timing(H264Context *h)
@@ -175,20 +175,67 @@ static int decode_buffering_period(H264Context *h)
     return 0;
 }
 
+static int decode_frame_packing_arrangement(H264Context *h)
+{
+    get_ue_golomb(&h->gb);              // frame_packing_arrangement_id
+    h->sei_frame_packing_present = !get_bits1(&h->gb);
+
+    if (h->sei_frame_packing_present) {
+        h->frame_packing_arrangement_type = get_bits(&h->gb, 7);
+        h->quincunx_subsampling           = get_bits1(&h->gb);
+        h->content_interpretation_type    = get_bits(&h->gb, 6);
+
+        // the following skips: spatial_flipping_flag, frame0_flipped_flag,
+        // field_views_flag, current_frame_is_frame0_flag,
+        // frame0_self_contained_flag, frame1_self_contained_flag
+        skip_bits(&h->gb, 6);
+
+        if (!h->quincunx_subsampling && h->frame_packing_arrangement_type != 5)
+            skip_bits(&h->gb, 16);      // frame[01]_grid_position_[xy]
+        skip_bits(&h->gb, 8);           // frame_packing_arrangement_reserved_byte
+        get_ue_golomb(&h->gb);          // frame_packing_arrangement_repetition_period
+    }
+    skip_bits1(&h->gb);                 // frame_packing_arrangement_extension_flag
+
+    return 0;
+}
+
+static int decode_display_orientation(H264Context *h)
+{
+    h->sei_display_orientation_present = !get_bits1(&h->gb);
+
+    if (h->sei_display_orientation_present) {
+        h->sei_hflip = get_bits1(&h->gb);     // hor_flip
+        h->sei_vflip = get_bits1(&h->gb);     // ver_flip
+
+        h->sei_anticlockwise_rotation = get_bits(&h->gb, 16);
+        get_ue_golomb(&h->gb);  // display_orientation_repetition_period
+        skip_bits1(&h->gb);     // display_orientation_extension_flag
+    }
+
+    return 0;
+}
+
 int ff_h264_decode_sei(H264Context *h)
 {
     while (get_bits_left(&h->gb) > 16) {
         int size = 0;
         int type = 0;
         int ret  = 0;
+        int last = 0;
 
-        do
-            type += show_bits(&h->gb, 8);
-        while (get_bits(&h->gb, 8) == 255);
+        while (get_bits_left(&h->gb) >= 8 &&
+               (last = get_bits(&h->gb, 8)) == 255) {
+            type += 255;
+        }
+        type += last;
 
-        do
-            size += show_bits(&h->gb, 8);
-        while (get_bits(&h->gb, 8) == 255);
+        last = 0;
+        while (get_bits_left(&h->gb) >= 8 &&
+               (last = get_bits(&h->gb, 8)) == 255) {
+            size += 255;
+        }
+        size += last;
 
         if (size > get_bits_left(&h->gb) / 8) {
             av_log(h->avctx, AV_LOG_ERROR, "SEI type %d truncated at %d\n",
@@ -212,8 +259,18 @@ int ff_h264_decode_sei(H264Context *h)
             if (ret < 0)
                 return ret;
             break;
-        case SEI_BUFFERING_PERIOD:
+        case SEI_TYPE_BUFFERING_PERIOD:
             ret = decode_buffering_period(h);
+            if (ret < 0)
+                return ret;
+            break;
+        case SEI_TYPE_FRAME_PACKING:
+            ret = decode_frame_packing_arrangement(h);
+            if (ret < 0)
+                return ret;
+            break;
+        case SEI_TYPE_DISPLAY_ORIENTATION:
+            ret = decode_display_orientation(h);
             if (ret < 0)
                 return ret;
             break;

@@ -30,6 +30,7 @@
 #include "h264data.h"
 #include "golomb.h"
 #include "internal.h"
+#include "mpegutils.h"
 
 #include <assert.h>
 
@@ -47,7 +48,7 @@ static int h264_find_frame_end(H264Context *h, const uint8_t *buf,
 
     for (i = 0; i < buf_size; i++) {
         if (state == 7) {
-            i += h->h264dsp.h264_find_start_code_candidate(buf + i, buf_size - i);
+            i += h->h264dsp.startcode_find_candidate(buf + i, buf_size - i);
             if (i < buf_size)
                 state = 2;
         } else if (state <= 2) {
@@ -58,13 +59,15 @@ static int h264_find_frame_end(H264Context *h, const uint8_t *buf,
             else
                 state >>= 1;           // 2->1, 1->0, 0->0
         } else if (state <= 5) {
-            int v = buf[i] & 0x1F;
-            if (v == 6 || v == 7 || v == 8 || v == 9) {
+            int nalu_type = buf[i] & 0x1F;
+            if (nalu_type == NAL_SEI || nalu_type == NAL_SPS ||
+                nalu_type == NAL_PPS || nalu_type == NAL_AUD) {
                 if (pc->frame_start_found) {
                     i++;
                     goto found;
                 }
-            } else if (v == 1 || v == 2 || v == 5) {
+            } else if (nalu_type == NAL_SLICE || nalu_type == NAL_DPA ||
+                       nalu_type == NAL_IDR_SLICE) {
                 if (pc->frame_start_found) {
                     state += 8;
                     continue;
@@ -118,7 +121,8 @@ static int scan_mmco_reset(AVCodecParserContext *s)
                         break;
 
                     if (index >= h->ref_count[list]) {
-                        av_log(h->avctx, AV_LOG_ERROR, "reference count overflow\n");
+                        av_log(h->avctx, AV_LOG_ERROR,
+                               "reference count %d overflow\n", index);
                         return AVERROR_INVALIDDATA;
                     }
                 }
@@ -211,7 +215,7 @@ static inline int parse_nal_units(AVCodecParserContext *s,
             break;
         }
         ptr = ff_h264_decode_nal(h, buf, &dst_length, &consumed, src_length);
-        if (ptr == NULL || dst_length < 0)
+        if (!ptr || dst_length < 0)
             break;
 
         init_get_bits(&h->gb, ptr, 8 * dst_length);
@@ -244,18 +248,18 @@ static inline int parse_nal_units(AVCodecParserContext *s,
             pps_id = get_ue_golomb(&h->gb);
             if (pps_id >= MAX_PPS_COUNT) {
                 av_log(h->avctx, AV_LOG_ERROR,
-                       "pps_id out of range\n");
+                       "pps_id %u out of range\n", pps_id);
                 return -1;
             }
             if (!h->pps_buffers[pps_id]) {
                 av_log(h->avctx, AV_LOG_ERROR,
-                       "non-existing PPS referenced\n");
+                       "non-existing PPS %u referenced\n", pps_id);
                 return -1;
             }
             h->pps = *h->pps_buffers[pps_id];
             if (!h->sps_buffers[h->pps.sps_id]) {
                 av_log(h->avctx, AV_LOG_ERROR,
-                       "non-existing SPS referenced\n");
+                       "non-existing SPS %u referenced\n", h->pps.sps_id);
                 return -1;
             }
             h->sps       = *h->sps_buffers[h->pps.sps_id];

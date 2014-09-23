@@ -22,15 +22,15 @@
 #ifndef AVCODEC_FFT_H
 #define AVCODEC_FFT_H
 
-#ifndef CONFIG_FFT_FLOAT
-#define CONFIG_FFT_FLOAT 1
+#ifndef FFT_FLOAT
+#define FFT_FLOAT 1
 #endif
 
 #include <stdint.h>
 #include "config.h"
 #include "libavutil/mem.h"
 
-#if CONFIG_FFT_FLOAT
+#if FFT_FLOAT
 
 #include "avfft.h"
 
@@ -51,13 +51,24 @@ typedef struct FFTComplex {
 
 typedef struct FFTContext FFTContext;
 
-#endif /* CONFIG_FFT_FLOAT */
+#endif /* FFT_FLOAT */
 
 typedef struct FFTDComplex {
     FFTDouble re, im;
 } FFTDComplex;
 
 /* FFT computation */
+
+enum fft_permutation_type {
+    FF_FFT_PERM_DEFAULT,
+    FF_FFT_PERM_SWAP_LSBS,
+    FF_FFT_PERM_AVX,
+};
+
+enum mdct_permutation_type {
+    FF_MDCT_PERM_NONE,
+    FF_MDCT_PERM_INTERLEAVE,
+};
 
 struct FFTContext {
     int nbits;
@@ -82,13 +93,8 @@ struct FFTContext {
     void (*imdct_half)(struct FFTContext *s, FFTSample *output, const FFTSample *input);
     void (*mdct_calc)(struct FFTContext *s, FFTSample *output, const FFTSample *input);
     void (*mdct_calcw)(struct FFTContext *s, FFTDouble *output, const FFTSample *input);
-    int fft_permutation;
-#define FF_FFT_PERM_DEFAULT   0
-#define FF_FFT_PERM_SWAP_LSBS 1
-#define FF_FFT_PERM_AVX       2
-    int mdct_permutation;
-#define FF_MDCT_PERM_NONE       0
-#define FF_MDCT_PERM_INTERLEAVE 1
+    enum fft_permutation_type fft_permutation;
+    enum mdct_permutation_type mdct_permutation;
 };
 
 #if CONFIG_HARDCODED_TABLES
@@ -133,6 +139,7 @@ void ff_init_ff_cos_tabs(int index);
  */
 int ff_fft_init(FFTContext *s, int nbits, int inverse);
 
+void ff_fft_init_aarch64(FFTContext *s);
 void ff_fft_init_x86(FFTContext *s);
 void ff_fft_init_arm(FFTContext *s);
 void ff_fft_init_ppc(FFTContext *s);

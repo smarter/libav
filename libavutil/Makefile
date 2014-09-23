@@ -16,6 +16,8 @@ HEADERS = adler32.h                                                     \
           common.h                                                      \
           cpu.h                                                         \
           crc.h                                                         \
+          display.h                                                     \
+          downmix_info.h                                                \
           error.h                                                       \
           eval.h                                                        \
           fifo.h                                                        \
@@ -24,10 +26,10 @@ HEADERS = adler32.h                                                     \
           hmac.h                                                        \
           imgutils.h                                                    \
           intfloat.h                                                    \
-          intfloat_readwrite.h                                          \
           intreadwrite.h                                                \
           lfg.h                                                         \
           log.h                                                         \
+          macros.h                                                      \
           mathematics.h                                                 \
           md5.h                                                         \
           mem.h                                                         \
@@ -38,9 +40,11 @@ HEADERS = adler32.h                                                     \
           pixdesc.h                                                     \
           pixfmt.h                                                      \
           random_seed.h                                                 \
+          replaygain.h                                                  \
           rational.h                                                    \
           samplefmt.h                                                   \
           sha.h                                                         \
+          stereo3d.h                                                    \
           time.h                                                        \
           version.h                                                     \
           xtea.h                                                        \
@@ -66,6 +70,8 @@ OBJS = adler32.o                                                        \
        cpu.o                                                            \
        crc.o                                                            \
        des.o                                                            \
+       display.o                                                        \
+       downmix_info.o                                                   \
        error.o                                                          \
        eval.o                                                           \
        fifo.o                                                           \
@@ -75,7 +81,6 @@ OBJS = adler32.o                                                        \
        frame.o                                                          \
        hmac.o                                                           \
        imgutils.o                                                       \
-       intfloat_readwrite.o                                             \
        intmath.o                                                        \
        lfg.o                                                            \
        lls.o                                                            \
@@ -93,6 +98,7 @@ OBJS = adler32.o                                                        \
        rc4.o                                                            \
        samplefmt.o                                                      \
        sha.o                                                            \
+       stereo3d.o                                                       \
        time.o                                                           \
        tree.o                                                           \
        utils.o                                                          \
@@ -119,6 +125,7 @@ TESTPROGS = adler32                                                     \
             des                                                         \
             eval                                                        \
             fifo                                                        \
+            float_dsp                                                   \
             hmac                                                        \
             lfg                                                         \
             lls                                                         \

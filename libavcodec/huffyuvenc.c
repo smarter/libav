@@ -29,6 +29,7 @@
 #include "avcodec.h"
 #include "huffyuv.h"
 #include "huffman.h"
+#include "huffyuvencdsp.h"
 #include "put_bits.h"
 
 static inline int sub_left_prediction(HYuvContext *s, uint8_t *dst,
@@ -48,7 +49,7 @@ static inline int sub_left_prediction(HYuvContext *s, uint8_t *dst,
             dst[i] = temp - left;
             left   = temp;
         }
-        s->dsp.diff_bytes(dst + 16, src + 16, src + 15, w - 16);
+        s->hencdsp.diff_bytes(dst + 16, src + 16, src + 15, w - 16);
         return src[w-1];
     }
 }
@@ -80,7 +81,7 @@ static inline void sub_left_prediction_bgr32(HYuvContext *s, uint8_t *dst,
         a = at;
     }
 
-    s->dsp.diff_bytes(dst + 16, src + 16, src + 12, w * 4 - 16);
+    s->hencdsp.diff_bytes(dst + 16, src + 16, src + 12, w * 4 - 16);
 
     *red   = src[(w - 1) * 4 + R];
     *green = src[(w - 1) * 4 + G];
@@ -109,7 +110,7 @@ static inline void sub_left_prediction_rgb24(HYuvContext *s, uint8_t *dst,
         b = bt;
     }
 
-    s->dsp.diff_bytes(dst + 48, src + 48, src + 48 - 3, w * 3 - 48);
+    s->hencdsp.diff_bytes(dst + 48, src + 48, src + 48 - 3, w * 3 - 48);
 
     *red   = src[(w - 1) * 3 + 0];
     *green = src[(w - 1) * 3 + 1];
@@ -146,12 +147,18 @@ static av_cold int encode_init(AVCodecContext *avctx)
     int i, j;
 
     ff_huffyuv_common_init(avctx);
+    ff_huffyuvencdsp_init(&s->hencdsp);
 
     avctx->extradata = av_mallocz(1024*30); // 256*3+4 == 772
     avctx->stats_out = av_mallocz(1024*30); // 21*256*3(%llu ) + 3(\n) + 1(0) = 16132
     s->version = 2;
 
-    avctx->coded_frame = &s->picture;
+    avctx->coded_frame = av_frame_alloc();
+    if (!avctx->coded_frame)
+        return AVERROR(ENOMEM);
+
+    avctx->coded_frame->pict_type = AV_PICTURE_TYPE_I;
+    avctx->coded_frame->key_frame = 1;
 
     switch (avctx->pix_fmt) {
     case AV_PIX_FMT_YUV420P:
@@ -438,7 +445,7 @@ static int encode_frame(AVCodecContext *avctx, AVPacket *pkt,
     const int fake_ystride = s->interlaced ? pict->linesize[0]*2  : pict->linesize[0];
     const int fake_ustride = s->interlaced ? pict->linesize[1]*2  : pict->linesize[1];
     const int fake_vstride = s->interlaced ? pict->linesize[2]*2  : pict->linesize[2];
-    AVFrame * const p = &s->picture;
+    const AVFrame * const p = pict;
     int i, j, size = 0, ret;
 
     if (!pkt->data &&
@@ -446,10 +453,6 @@ static int encode_frame(AVCodecContext *avctx, AVPacket *pkt,
         av_log(avctx, AV_LOG_ERROR, "Error allocating output packet.\n");
         return ret;
     }
-
-    *p = *pict;
-    p->pict_type = AV_PICTURE_TYPE_I;
-    p->key_frame = 1;
 
     if (s->context) {
         for (i = 0; i < 3; i++) {
@@ -502,9 +505,9 @@ static int encode_frame(AVCodecContext *avctx, AVPacket *pkt,
             lefttopy = p->data[0][3];
             lefttopu = p->data[1][1];
             lefttopv = p->data[2][1];
-            s->dsp.sub_hfyu_median_prediction(s->temp[0], p->data[0]+4, p->data[0] + fake_ystride + 4, width - 4 , &lefty, &lefttopy);
-            s->dsp.sub_hfyu_median_prediction(s->temp[1], p->data[1]+2, p->data[1] + fake_ustride + 2, width2 - 2, &leftu, &lefttopu);
-            s->dsp.sub_hfyu_median_prediction(s->temp[2], p->data[2]+2, p->data[2] + fake_vstride + 2, width2 - 2, &leftv, &lefttopv);
+            s->hencdsp.sub_hfyu_median_pred(s->temp[0], p->data[0] + 4, p->data[0] + fake_ystride + 4, width  - 4, &lefty, &lefttopy);
+            s->hencdsp.sub_hfyu_median_pred(s->temp[1], p->data[1] + 2, p->data[1] + fake_ustride + 2, width2 - 2, &leftu, &lefttopu);
+            s->hencdsp.sub_hfyu_median_pred(s->temp[2], p->data[2] + 2, p->data[2] + fake_vstride + 2, width2 - 2, &leftv, &lefttopv);
             encode_422_bitstream(s, 0, width - 4);
             y++; cy++;
 
@@ -514,7 +517,7 @@ static int encode_frame(AVCodecContext *avctx, AVPacket *pkt,
                 if (s->bitstream_bpp == 12) {
                     while (2 * cy > y) {
                         ydst = p->data[0] + p->linesize[0] * y;
-                        s->dsp.sub_hfyu_median_prediction(s->temp[0], ydst - fake_ystride, ydst, width , &lefty, &lefttopy);
+                        s->hencdsp.sub_hfyu_median_pred(s->temp[0], ydst - fake_ystride, ydst, width, &lefty, &lefttopy);
                         encode_gray_bitstream(s, width);
                         y++;
                     }
@@ -524,9 +527,9 @@ static int encode_frame(AVCodecContext *avctx, AVPacket *pkt,
                 udst = p->data[1] + p->linesize[1] * cy;
                 vdst = p->data[2] + p->linesize[2] * cy;
 
-                s->dsp.sub_hfyu_median_prediction(s->temp[0], ydst - fake_ystride, ydst, width , &lefty, &lefttopy);
-                s->dsp.sub_hfyu_median_prediction(s->temp[1], udst - fake_ustride, udst, width2, &leftu, &lefttopu);
-                s->dsp.sub_hfyu_median_prediction(s->temp[2], vdst - fake_vstride, vdst, width2, &leftv, &lefttopv);
+                s->hencdsp.sub_hfyu_median_pred(s->temp[0], ydst - fake_ystride, ydst, width,  &lefty, &lefttopy);
+                s->hencdsp.sub_hfyu_median_pred(s->temp[1], udst - fake_ustride, udst, width2, &leftu, &lefttopu);
+                s->hencdsp.sub_hfyu_median_pred(s->temp[2], vdst - fake_vstride, vdst, width2, &leftv, &lefttopv);
 
                 encode_422_bitstream(s, 0, width);
             }
@@ -539,7 +542,7 @@ static int encode_frame(AVCodecContext *avctx, AVPacket *pkt,
                     ydst = p->data[0] + p->linesize[0] * y;
 
                     if (s->predictor == PLANE && s->interlaced < y) {
-                        s->dsp.diff_bytes(s->temp[1], ydst, ydst - fake_ystride, width);
+                        s->hencdsp.diff_bytes(s->temp[1], ydst, ydst - fake_ystride, width);
 
                         lefty = sub_left_prediction(s, s->temp[0], s->temp[1], width , lefty);
                     } else {
@@ -555,9 +558,9 @@ static int encode_frame(AVCodecContext *avctx, AVPacket *pkt,
                 vdst = p->data[2] + p->linesize[2] * cy;
 
                 if (s->predictor == PLANE && s->interlaced < cy) {
-                    s->dsp.diff_bytes(s->temp[1], ydst, ydst - fake_ystride, width);
-                    s->dsp.diff_bytes(s->temp[2], udst, udst - fake_ustride, width2);
-                    s->dsp.diff_bytes(s->temp[2] + width2, vdst, vdst - fake_vstride, width2);
+                    s->hencdsp.diff_bytes(s->temp[1],          ydst, ydst - fake_ystride, width);
+                    s->hencdsp.diff_bytes(s->temp[2],          udst, udst - fake_ustride, width2);
+                    s->hencdsp.diff_bytes(s->temp[2] + width2, vdst, vdst - fake_vstride, width2);
 
                     lefty = sub_left_prediction(s, s->temp[0], s->temp[1], width , lefty);
                     leftu = sub_left_prediction(s, s->temp[1], s->temp[2], width2, leftu);
@@ -590,7 +593,7 @@ static int encode_frame(AVCodecContext *avctx, AVPacket *pkt,
         for (y = 1; y < s->height; y++) {
             uint8_t *dst = data + y*stride;
             if (s->predictor == PLANE && s->interlaced < y) {
-                s->dsp.diff_bytes(s->temp[1], dst, dst - fake_stride, width * 4);
+                s->hencdsp.diff_bytes(s->temp[1], dst, dst - fake_stride, width * 4);
                 sub_left_prediction_bgr32(s, s->temp[0], s->temp[1], width,
                                           &leftr, &leftg, &leftb, &lefta);
             } else {
@@ -618,8 +621,8 @@ static int encode_frame(AVCodecContext *avctx, AVPacket *pkt,
         for (y = 1; y < s->height; y++) {
             uint8_t *dst = data + y * stride;
             if (s->predictor == PLANE && s->interlaced < y) {
-                s->dsp.diff_bytes(s->temp[1], dst, dst - fake_stride,
-                                  width * 3);
+                s->hencdsp.diff_bytes(s->temp[1], dst, dst - fake_stride,
+                                      width * 3);
                 sub_left_prediction_rgb24(s, s->temp[0], s->temp[1], width,
                                           &leftr, &leftg, &leftb);
             } else {
@@ -655,7 +658,7 @@ static int encode_frame(AVCodecContext *avctx, AVPacket *pkt,
         avctx->stats_out[0] = '\0';
     if (!(s->avctx->flags2 & CODEC_FLAG2_NO_OUTPUT)) {
         flush_put_bits(&s->pb);
-        s->dsp.bswap_buf((uint32_t*)pkt->data, (uint32_t*)pkt->data, size);
+        s->bdsp.bswap_buf((uint32_t *) pkt->data, (uint32_t *) pkt->data, size);
     }
 
     s->picture_number++;
@@ -676,10 +679,11 @@ static av_cold int encode_end(AVCodecContext *avctx)
     av_freep(&avctx->extradata);
     av_freep(&avctx->stats_out);
 
+    av_frame_free(&avctx->coded_frame);
+
     return 0;
 }
 
-#if CONFIG_HUFFYUV_ENCODER
 AVCodec ff_huffyuv_encoder = {
     .name           = "huffyuv",
     .long_name      = NULL_IF_CONFIG_SMALL("Huffyuv / HuffYUV"),
@@ -694,7 +698,6 @@ AVCodec ff_huffyuv_encoder = {
         AV_PIX_FMT_RGB32, AV_PIX_FMT_NONE
     },
 };
-#endif
 
 #if CONFIG_FFVHUFF_ENCODER
 AVCodec ff_ffvhuff_encoder = {

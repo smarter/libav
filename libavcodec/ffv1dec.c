@@ -30,6 +30,7 @@
 #include "libavutil/crc.h"
 #include "libavutil/opt.h"
 #include "libavutil/imgutils.h"
+#include "libavutil/timer.h"
 #include "avcodec.h"
 #include "internal.h"
 #include "get_bits.h"
@@ -327,6 +328,14 @@ static int decode_slice_header(FFV1Context *f, FFV1Context *fs)
     f->cur->sample_aspect_ratio.num = get_symbol(c, state, 0);
     f->cur->sample_aspect_ratio.den = get_symbol(c, state, 0);
 
+    if (av_image_check_sar(f->width, f->height,
+                           f->cur->sample_aspect_ratio) < 0) {
+        av_log(f->avctx, AV_LOG_WARNING, "ignoring invalid SAR: %u/%u\n",
+               f->cur->sample_aspect_ratio.num,
+               f->cur->sample_aspect_ratio.den);
+        f->cur->sample_aspect_ratio = (AVRational){ 0, 1 };
+    }
+
     return 0;
 }
 
@@ -541,6 +550,7 @@ static int read_header(FFV1Context *f)
     memset(state, 128, sizeof(state));
 
     if (f->version < 2) {
+        int chroma_planes, chroma_h_shift, chroma_v_shift, transparency, colorspace, bits_per_raw_sample;
         unsigned v = get_symbol(c, state, 0);
         if (v > 1) {
             av_log(f->avctx, AV_LOG_ERROR,
@@ -557,15 +567,32 @@ static int read_header(FFV1Context *f)
                     get_symbol(c, state, 1) + c->one_state[i];
         }
 
-        f->colorspace = get_symbol(c, state, 0); //YUV cs type
+        colorspace          = get_symbol(c, state, 0); //YUV cs type
+        bits_per_raw_sample = f->version > 0 ? get_symbol(c, state, 0) : f->avctx->bits_per_raw_sample;
+        chroma_planes       = get_rac(c, state);
+        chroma_h_shift      = get_symbol(c, state, 0);
+        chroma_v_shift      = get_symbol(c, state, 0);
+        transparency        = get_rac(c, state);
 
-        if (f->version > 0)
-            f->avctx->bits_per_raw_sample = get_symbol(c, state, 0);
+        if (f->plane_count) {
+            if (colorspace          != f->colorspace                 ||
+                bits_per_raw_sample != f->avctx->bits_per_raw_sample ||
+                chroma_planes       != f->chroma_planes              ||
+                chroma_h_shift      != f->chroma_h_shift             ||
+                chroma_v_shift      != f->chroma_v_shift             ||
+                transparency        != f->transparency) {
+                av_log(f->avctx, AV_LOG_ERROR, "Invalid change of global parameters\n");
+                return AVERROR_INVALIDDATA;
+            }
+        }
 
-        f->chroma_planes  = get_rac(c, state);
-        f->chroma_h_shift = get_symbol(c, state, 0);
-        f->chroma_v_shift = get_symbol(c, state, 0);
-        f->transparency   = get_rac(c, state);
+        f->colorspace                 = colorspace;
+        f->avctx->bits_per_raw_sample = bits_per_raw_sample;
+        f->chroma_planes              = chroma_planes;
+        f->chroma_h_shift             = chroma_h_shift;
+        f->chroma_v_shift             = chroma_v_shift;
+        f->transparency               = transparency;
+
         f->plane_count    = 2 + f->transparency;
     }
 
@@ -784,6 +811,10 @@ static av_cold int ffv1_decode_init(AVCodecContext *avctx)
 
     ffv1_common_init(avctx);
 
+    f->last_picture = av_frame_alloc();
+    if (!f->last_picture)
+        return AVERROR(ENOMEM);
+
     if (avctx->extradata && (ret = read_extra_header(f)) < 0)
         return ret;
 
@@ -876,7 +907,7 @@ static int ffv1_decode_frame(AVCodecContext *avctx, void *data,
     for (i = f->slice_count - 1; i >= 0; i--) {
         FFV1Context *fs = f->slice_context[i];
         int j;
-        if (fs->slice_damaged && f->last_picture.data[0]) {
+        if (fs->slice_damaged && f->last_picture->data[0]) {
             const uint8_t *src[4];
             uint8_t *dst[4];
             for (j = 0; j < 4; j++) {
@@ -884,12 +915,12 @@ static int ffv1_decode_frame(AVCodecContext *avctx, void *data,
                 int sv = (j == 1 || j == 2) ? f->chroma_v_shift : 0;
                 dst[j] = p->data[j] + p->linesize[j] *
                          (fs->slice_y >> sv) + (fs->slice_x >> sh);
-                src[j] = f->last_picture.data[j] +
-                         f->last_picture.linesize[j] *
+                src[j] = f->last_picture->data[j] +
+                         f->last_picture->linesize[j] *
                          (fs->slice_y >> sv) + (fs->slice_x >> sh);
             }
             av_image_copy(dst, p->linesize, (const uint8_t **)src,
-                          f->last_picture.linesize,
+                          f->last_picture->linesize,
                           avctx->pix_fmt, fs->slice_width,
                           fs->slice_height);
         }
@@ -897,14 +928,25 @@ static int ffv1_decode_frame(AVCodecContext *avctx, void *data,
 
     f->picture_number++;
 
-    av_frame_unref(&f->last_picture);
-    if ((ret = av_frame_ref(&f->last_picture, p)) < 0)
+    av_frame_unref(f->last_picture);
+    if ((ret = av_frame_ref(f->last_picture, p)) < 0)
         return ret;
     f->cur = NULL;
 
     *got_frame = 1;
 
     return buf_size;
+}
+
+static av_cold int ffv1_decode_close(AVCodecContext *avctx)
+{
+    FFV1Context *s = avctx->priv_data;;
+
+    av_frame_free(&s->last_picture);
+
+    ffv1_close(avctx);
+
+    return 0;
 }
 
 AVCodec ff_ffv1_decoder = {
@@ -914,7 +956,7 @@ AVCodec ff_ffv1_decoder = {
     .id             = AV_CODEC_ID_FFV1,
     .priv_data_size = sizeof(FFV1Context),
     .init           = ffv1_decode_init,
-    .close          = ffv1_close,
+    .close          = ffv1_decode_close,
     .decode         = ffv1_decode_frame,
     .capabilities   = CODEC_CAP_DR1 /*| CODEC_CAP_DRAW_HORIZ_BAND*/ |
                       CODEC_CAP_SLICE_THREADS,

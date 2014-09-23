@@ -48,12 +48,15 @@ void avfilter_register_all(void)
     REGISTER_FILTER(AMIX,           amix,           af);
     REGISTER_FILTER(ANULL,          anull,          af);
     REGISTER_FILTER(ASETPTS,        asetpts,        af);
+    REGISTER_FILTER(ASETTB,         asettb,         af);
     REGISTER_FILTER(ASHOWINFO,      ashowinfo,      af);
     REGISTER_FILTER(ASPLIT,         asplit,         af);
     REGISTER_FILTER(ASYNCTS,        asyncts,        af);
     REGISTER_FILTER(ATRIM,          atrim,          af);
+    REGISTER_FILTER(BS2B,           bs2b,           af);
     REGISTER_FILTER(CHANNELMAP,     channelmap,     af);
     REGISTER_FILTER(CHANNELSPLIT,   channelsplit,   af);
+    REGISTER_FILTER(COMPAND,        compand,        af);
     REGISTER_FILTER(JOIN,           join,           af);
     REGISTER_FILTER(RESAMPLE,       resample,       af);
     REGISTER_FILTER(VOLUME,         volume,         af);
@@ -74,6 +77,7 @@ void avfilter_register_all(void)
     REGISTER_FILTER(FIELDORDER,     fieldorder,     vf);
     REGISTER_FILTER(FORMAT,         format,         vf);
     REGISTER_FILTER(FPS,            fps,            vf);
+    REGISTER_FILTER(FRAMEPACK,      framepack,      vf);
     REGISTER_FILTER(FREI0R,         frei0r,         vf);
     REGISTER_FILTER(GRADFUN,        gradfun,        vf);
     REGISTER_FILTER(HFLIP,          hflip,          vf);
@@ -96,6 +100,7 @@ void avfilter_register_all(void)
     REGISTER_FILTER(SETSAR,         setsar,         vf);
     REGISTER_FILTER(SETTB,          settb,          vf);
     REGISTER_FILTER(SHOWINFO,       showinfo,       vf);
+    REGISTER_FILTER(SHUFFLEPLANES,  shuffleplanes,  vf);
     REGISTER_FILTER(SPLIT,          split,          vf);
     REGISTER_FILTER(TRANSPOSE,      transpose,      vf);
     REGISTER_FILTER(TRIM,           trim,           vf);

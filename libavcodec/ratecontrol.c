@@ -28,6 +28,7 @@
 #include "libavutil/attributes.h"
 #include "avcodec.h"
 #include "ratecontrol.h"
+#include "mpegutils.h"
 #include "mpegvideo.h"
 #include "libavutil/eval.h"
 
@@ -47,10 +48,10 @@ void ff_write_pass1_stats(MpegEncContext *s)
     snprintf(s->avctx->stats_out, 256,
              "in:%d out:%d type:%d q:%d itex:%d ptex:%d mv:%d misc:%d "
              "fcode:%d bcode:%d mc-var:%d var:%d icount:%d skipcount:%d hbits:%d;\n",
-             s->current_picture_ptr->f.display_picture_number,
-             s->current_picture_ptr->f.coded_picture_number,
+             s->current_picture_ptr->f->display_picture_number,
+             s->current_picture_ptr->f->coded_picture_number,
              s->pict_type,
-             s->current_picture.f.quality,
+             s->current_picture.f->quality,
              s->i_tex_bits,
              s->p_tex_bits,
              s->mv_bits,
@@ -671,7 +672,7 @@ static void adaptive_quantization(MpegEncContext *s, double q)
     }
 
     /* handle qmin/qmax clipping */
-    if (s->flags & CODEC_FLAG_NORMALIZE_AQP) {
+    if (s->mpv_flags & FF_MPV_FLAG_NAQ) {
         float factor = bits_sum / cplx_sum;
         for (i = 0; i < s->mb_num; i++) {
             float newq = q * cplx_tab[i] / bits_tab[i];
@@ -696,7 +697,7 @@ static void adaptive_quantization(MpegEncContext *s, double q)
         float newq      = q * cplx_tab[i] / bits_tab[i];
         int intq;
 
-        if (s->flags & CODEC_FLAG_NORMALIZE_AQP) {
+        if (s->mpv_flags & FF_MPV_FLAG_NAQ) {
             newq *= bits_sum / cplx_sum;
         }
 
@@ -776,10 +777,10 @@ float ff_rate_estimate_qscale(MpegEncContext *s, int dry_run)
         else
             dts_pic = s->last_picture_ptr;
 
-        if (!dts_pic || dts_pic->f.pts == AV_NOPTS_VALUE)
+        if (!dts_pic || dts_pic->f->pts == AV_NOPTS_VALUE)
             wanted_bits = (uint64_t)(s->bit_rate * (double)picture_number / fps);
         else
-            wanted_bits = (uint64_t)(s->bit_rate * (double)dts_pic->f.pts / fps);
+            wanted_bits = (uint64_t)(s->bit_rate * (double)dts_pic->f->pts / fps);
     }
 
     diff = s->total_bits - wanted_bits;

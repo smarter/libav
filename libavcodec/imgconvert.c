@@ -31,25 +31,13 @@
  */
 
 #include "avcodec.h"
-#include "dsputil.h"
 #include "imgconvert.h"
 #include "internal.h"
+#include "mathops.h"
 #include "libavutil/colorspace.h"
 #include "libavutil/common.h"
 #include "libavutil/pixdesc.h"
 #include "libavutil/imgutils.h"
-
-#if HAVE_MMX_EXTERNAL
-#include "x86/dsputil_x86.h"
-#endif
-
-#if HAVE_MMX_EXTERNAL
-#define deinterlace_line_inplace ff_deinterlace_line_inplace_mmx
-#define deinterlace_line         ff_deinterlace_line_mmx
-#else
-#define deinterlace_line_inplace deinterlace_line_inplace_c
-#define deinterlace_line         deinterlace_line_c
-#endif
 
 void avcodec_get_chroma_sub_sample(enum AVPixelFormat pix_fmt, int *h_shift, int *v_shift)
 {
@@ -350,7 +338,13 @@ int av_picture_pad(AVPicture *dst, const AVPicture *src, int height, int width,
 
 #if FF_API_DEINTERLACE
 
-#if !HAVE_MMX_EXTERNAL
+#if HAVE_MMX_EXTERNAL
+#define deinterlace_line_inplace ff_deinterlace_line_inplace_mmx
+#define deinterlace_line         ff_deinterlace_line_mmx
+#else
+#define deinterlace_line_inplace deinterlace_line_inplace_c
+#define deinterlace_line         deinterlace_line_c
+
 /* filter parameters: [-1 4 2 4 -1] // 8 */
 static void deinterlace_line_c(uint8_t *dst,
                              const uint8_t *lum_m4, const uint8_t *lum_m3,
@@ -358,7 +352,7 @@ static void deinterlace_line_c(uint8_t *dst,
                              const uint8_t *lum,
                              int size)
 {
-    const uint8_t *cm = ff_cropTbl + MAX_NEG_CROP;
+    const uint8_t *cm = ff_crop_tab + MAX_NEG_CROP;
     int sum;
 
     for(;size > 0;size--) {
@@ -381,7 +375,7 @@ static void deinterlace_line_inplace_c(uint8_t *lum_m4, uint8_t *lum_m3,
                                        uint8_t *lum_m2, uint8_t *lum_m1,
                                        uint8_t *lum, int size)
 {
-    const uint8_t *cm = ff_cropTbl + MAX_NEG_CROP;
+    const uint8_t *cm = ff_crop_tab + MAX_NEG_CROP;
     int sum;
 
     for(;size > 0;size--) {

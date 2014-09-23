@@ -16,13 +16,14 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
+#include "mathops.h"
 #include "rnd_avg.h"
 
 #ifndef BIT_DEPTH
 #define BIT_DEPTH 8
 #endif
 
-#ifdef AVCODEC_H264_HIGH_DEPTH_H
+#ifdef AVCODEC_BIT_DEPTH_TEMPLATE_C
 #   undef pixel
 #   undef pixel2
 #   undef pixel4
@@ -42,7 +43,7 @@
 #   undef av_clip_pixel
 #   undef PIXEL_SPLAT_X4
 #else
-#   define AVCODEC_H264_HIGH_DEPTH_H
+#   define AVCODEC_BIT_DEPTH_TEMPLATE_C
 #endif
 
 #if BIT_DEPTH > 8
@@ -70,7 +71,7 @@
 #   define pixel4 uint32_t
 #   define dctcoef int16_t
 
-#   define INIT_CLIP const uint8_t *cm = ff_cropTbl + MAX_NEG_CROP;
+#   define INIT_CLIP const uint8_t *cm = ff_crop_tab + MAX_NEG_CROP;
 #   define no_rnd_avg_pixel4 no_rnd_avg32
 #   define    rnd_avg_pixel4    rnd_avg32
 #   define AV_RN2P  AV_RN16

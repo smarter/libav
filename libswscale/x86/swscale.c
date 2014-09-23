@@ -74,7 +74,7 @@ DECLARE_ALIGNED(8, const uint64_t, ff_w1111)        = 0x0001000100010001ULL;
 #if HAVE_MMX_INLINE
 #undef RENAME
 #define COMPILE_TEMPLATE_MMXEXT 0
-#define RENAME(a) a ## _MMX
+#define RENAME(a) a ## _mmx
 #include "swscale_template.c"
 #endif
 
@@ -83,7 +83,7 @@ DECLARE_ALIGNED(8, const uint64_t, ff_w1111)        = 0x0001000100010001ULL;
 #undef RENAME
 #undef COMPILE_TEMPLATE_MMXEXT
 #define COMPILE_TEMPLATE_MMXEXT 1
-#define RENAME(a) a ## _MMXEXT
+#define RENAME(a) a ## _mmxext
 #include "swscale_template.c"
 #endif
 
@@ -307,12 +307,12 @@ av_cold void ff_sws_init_swscale_x86(SwsContext *c)
     int cpu_flags = av_get_cpu_flags();
 
 #if HAVE_MMX_INLINE
-    if (cpu_flags & AV_CPU_FLAG_MMX)
-        sws_init_swscale_MMX(c);
+    if (INLINE_MMX(cpu_flags))
+        sws_init_swscale_mmx(c);
 #endif
 #if HAVE_MMXEXT_INLINE
-    if (cpu_flags & AV_CPU_FLAG_MMXEXT)
-        sws_init_swscale_MMXEXT(c);
+    if (INLINE_MMXEXT(cpu_flags))
+        sws_init_swscale_mmxext(c);
 #endif
 
 #define ASSIGN_SCALE_FUNC2(hscalefn, filtersize, opt1, opt2) do { \
@@ -363,7 +363,7 @@ switch(c->dstBpc){ \
         ASSIGN_VSCALE_FUNC(c->yuv2plane1, mmx, mmxext, cpu_flags & AV_CPU_FLAG_MMXEXT);
 
         switch (c->srcFormat) {
-        case AV_PIX_FMT_Y400A:
+        case AV_PIX_FMT_YA8:
             c->lumToYV12 = ff_yuyvToY_mmx;
             if (c->alpPixBuf)
                 c->alpToYV12 = ff_uyvyToY_mmx;
@@ -412,7 +412,7 @@ switch(c->dstBpc){ \
         ASSIGN_VSCALE_FUNC(c->yuv2plane1, sse2, sse2, 1);
 
         switch (c->srcFormat) {
-        case AV_PIX_FMT_Y400A:
+        case AV_PIX_FMT_YA8:
             c->lumToYV12 = ff_yuyvToY_sse2;
             if (c->alpPixBuf)
                 c->alpToYV12 = ff_uyvyToY_sse2;

@@ -118,7 +118,7 @@ enc_dec_pcm(){
     avconv -f $out_fmt -i ${encfile} -c:a pcm_${pcm_fmt} -f ${dec_fmt} -
 }
 
-FLAGS="-flags +bitexact -sws_flags +accurate_rnd+bitexact"
+FLAGS="-flags +bitexact -sws_flags +accurate_rnd+bitexact -fflags +bitexact"
 DEC_OPTS="-threads $threads -idct simple $FLAGS"
 ENC_OPTS="-threads 1        -idct simple -dct fastint"
 
@@ -160,14 +160,6 @@ video_filter(){
     printf '%-20s' $label
     avconv $DEC_OPTS -f image2 -vcodec pgmyuv -i $raw_src \
         $FLAGS $ENC_OPTS -vf "$filters" -vcodec rawvideo $* -f nut md5:
-}
-
-pixdesc(){
-    pix_fmts="$(avconv -pix_fmts list 2>/dev/null | awk 'NR > 8 && /^IO/ { print $2 }' | sort)"
-    for pix_fmt in $pix_fmts; do
-        test=$pix_fmt
-        video_filter "format=$pix_fmt,pixdesctest" -pix_fmt $pix_fmt
-    done
 }
 
 pixfmts(){

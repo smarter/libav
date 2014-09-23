@@ -53,6 +53,7 @@ const PixelFormatTag ff_raw_pix_fmt_tags[] = {
     { AV_PIX_FMT_YUYV422, MKTAG('V', '4', '2', '2') },
     { AV_PIX_FMT_YUYV422, MKTAG('V', 'Y', 'U', 'Y') },
     { AV_PIX_FMT_YUYV422, MKTAG('Y', 'U', 'N', 'V') },
+    { AV_PIX_FMT_YVYU422, MKTAG('Y', 'V', 'Y', 'U') }, /* Philips */
     { AV_PIX_FMT_UYVY422, MKTAG('U', 'Y', 'V', 'Y') },
     { AV_PIX_FMT_UYVY422, MKTAG('H', 'D', 'Y', 'C') },
     { AV_PIX_FMT_UYVY422, MKTAG('U', 'Y', 'N', 'V') },
@@ -84,6 +85,10 @@ const PixelFormatTag ff_raw_pix_fmt_tags[] = {
     { AV_PIX_FMT_BGR444BE, MKTAG(12 , 'R', 'G', 'B') },
     { AV_PIX_FMT_RGBA,     MKTAG('R', 'G', 'B', 'A') },
     { AV_PIX_FMT_BGRA,     MKTAG('B', 'G', 'R', 'A') },
+    { AV_PIX_FMT_RGBA64LE, MKTAG('R', 'B', 'A', 64 ) },
+    { AV_PIX_FMT_BGRA64LE, MKTAG('B', 'R', 'A', 64 ) },
+    { AV_PIX_FMT_RGBA64BE, MKTAG(64 , 'R', 'B', 'A') },
+    { AV_PIX_FMT_BGRA64BE, MKTAG(64 , 'B', 'R', 'A') },
     { AV_PIX_FMT_ABGR,     MKTAG('A', 'B', 'G', 'R') },
     { AV_PIX_FMT_ARGB,     MKTAG('A', 'R', 'G', 'B') },
     { AV_PIX_FMT_RGB24,    MKTAG('R', 'G', 'B', 24 ) },
@@ -122,7 +127,7 @@ const PixelFormatTag ff_raw_pix_fmt_tags[] = {
     { AV_PIX_FMT_YUV444P16LE, MKTAG('Y', '3',  0 , 16 ) },
     { AV_PIX_FMT_YUV444P16BE, MKTAG(16 ,  0 , '3', 'Y') },
     { AV_PIX_FMT_YUVA420P,    MKTAG('Y', '4', 11 ,  8 ) },
-    { AV_PIX_FMT_Y400A,       MKTAG('Y', '2',  0 ,  8 ) },
+    { AV_PIX_FMT_YA8,         MKTAG('Y', '2',  0 ,  8 ) },
 
     { AV_PIX_FMT_YUVA420P9LE,  MKTAG('Y', '4', 11 ,  9 ) },
     { AV_PIX_FMT_YUVA420P9BE,  MKTAG( 9 , 11 , '4', 'Y') },

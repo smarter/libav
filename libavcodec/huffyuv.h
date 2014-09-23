@@ -32,8 +32,10 @@
 #include <stdint.h>
 
 #include "avcodec.h"
-#include "dsputil.h"
+#include "bswapdsp.h"
 #include "get_bits.h"
+#include "huffyuvdsp.h"
+#include "huffyuvencdsp.h"
 #include "put_bits.h"
 
 #define VLC_BITS 11
@@ -78,10 +80,11 @@ typedef struct HYuvContext {
     uint32_t bits[3][256];
     uint32_t pix_bgr_map[1<<VLC_BITS];
     VLC vlc[6];                             //Y,U,V,YY,YU,YV
-    AVFrame picture;
     uint8_t *bitstream_buffer;
     unsigned int bitstream_buffer_size;
-    DSPContext dsp;
+    BswapDSPContext bdsp;
+    HuffYUVDSPContext hdsp;
+    HuffYUVEncDSPContext hencdsp;
 } HYuvContext;
 
 void ff_huffyuv_common_init(AVCodecContext *s);

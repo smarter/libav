@@ -20,6 +20,7 @@
  */
 
 #include <float.h>
+#include <stdint.h>
 
 #include "libavutil/mathematics.h"
 #include "libavutil/parseutils.h"
@@ -40,6 +41,7 @@ typedef struct HLSContext {
     const AVClass *class;  // Class for private options.
     unsigned number;
     int64_t sequence;
+    int64_t start_sequence;
     AVOutputFormat *oformat;
     AVFormatContext *avf;
     float time;            // Set by a private option.
@@ -54,6 +56,7 @@ typedef struct HLSContext {
     ListEntry *list;
     ListEntry *end_list;
     char *basename;
+    char *baseurl;
     AVIOContext *pb;
 } HLSContext;
 
@@ -129,6 +132,7 @@ static int hls_window(AVFormatContext *s, int last)
     ListEntry *en;
     int target_duration = 0;
     int ret = 0;
+    int64_t sequence = FFMAX(hls->start_sequence, hls->sequence - hls->size);
 
     if ((ret = avio_open2(&hls->pb, s->filename, AVIO_FLAG_WRITE,
                           &s->interrupt_callback, NULL)) < 0)
@@ -142,11 +146,15 @@ static int hls_window(AVFormatContext *s, int last)
     avio_printf(hls->pb, "#EXTM3U\n");
     avio_printf(hls->pb, "#EXT-X-VERSION:3\n");
     avio_printf(hls->pb, "#EXT-X-TARGETDURATION:%d\n", target_duration);
-    avio_printf(hls->pb, "#EXT-X-MEDIA-SEQUENCE:%"PRId64"\n",
-                FFMAX(0, hls->sequence - hls->size));
+    avio_printf(hls->pb, "#EXT-X-MEDIA-SEQUENCE:%"PRId64"\n", sequence);
+
+    av_log(s, AV_LOG_VERBOSE, "EXT-X-MEDIA-SEQUENCE:%"PRId64"\n",
+           sequence);
 
     for (en = hls->list; en; en = en->next) {
         avio_printf(hls->pb, "#EXTINF:%d,\n", en->duration);
+        if (hls->baseurl)
+            avio_printf(hls->pb, "%s", hls->baseurl);
         avio_printf(hls->pb, "%s\n", en->name);
     }
 
@@ -165,7 +173,7 @@ static int hls_start(AVFormatContext *s)
     int err = 0;
 
     if (av_get_frame_filename(oc->filename, sizeof(oc->filename),
-                              c->basename, c->wrap ? c->number % c->wrap : c->number) < 0)
+                              c->basename, c->wrap ? c->sequence % c->wrap : c->sequence) < 0)
         return AVERROR(EINVAL);
     c->number++;
 
@@ -187,8 +195,7 @@ static int hls_write_header(AVFormatContext *s)
     const char *pattern = "%d.ts";
     int basename_size = strlen(s->filename) + strlen(pattern) + 1;
 
-    hls->number      = 0;
-
+    hls->sequence       = hls->start_sequence;
     hls->recording_time = hls->time * AV_TIME_BASE;
     hls->start_pts      = AV_NOPTS_VALUE;
 
@@ -314,10 +321,11 @@ static int hls_write_trailer(struct AVFormatContext *s)
 #define OFFSET(x) offsetof(HLSContext, x)
 #define E AV_OPT_FLAG_ENCODING_PARAM
 static const AVOption options[] = {
-    {"start_number",  "first number in the sequence",            OFFSET(sequence),AV_OPT_TYPE_INT64,  {.i64 = 0},     0, INT64_MAX, E},
+    {"start_number",  "first number in the sequence",            OFFSET(start_sequence),AV_OPT_TYPE_INT64,  {.i64 = 0},     0, INT64_MAX, E},
     {"hls_time",      "segment length in seconds",               OFFSET(time),    AV_OPT_TYPE_FLOAT,  {.dbl = 2},     0, FLT_MAX, E},
     {"hls_list_size", "maximum number of playlist entries",      OFFSET(size),    AV_OPT_TYPE_INT,    {.i64 = 5},     0, INT_MAX, E},
     {"hls_wrap",      "number after which the index wraps",      OFFSET(wrap),    AV_OPT_TYPE_INT,    {.i64 = 0},     0, INT_MAX, E},
+    {"hls_base_url",  "url to prepend to each playlist entry",   OFFSET(baseurl), AV_OPT_TYPE_STRING, {.str = NULL},  0, 0,       E},
     { NULL },
 };
 
@@ -334,8 +342,8 @@ AVOutputFormat ff_hls_muxer = {
     .long_name      = NULL_IF_CONFIG_SMALL("Apple HTTP Live Streaming"),
     .extensions     = "m3u8",
     .priv_data_size = sizeof(HLSContext),
-    .audio_codec    = AV_CODEC_ID_MP2,
-    .video_codec    = AV_CODEC_ID_MPEG2VIDEO,
+    .audio_codec    = AV_CODEC_ID_AAC,
+    .video_codec    = AV_CODEC_ID_H264,
     .flags          = AVFMT_NOFILE | AVFMT_ALLOW_FLUSH,
     .write_header   = hls_write_header,
     .write_packet   = hls_write_packet,

@@ -142,7 +142,7 @@ static int rtp_write_header(AVFormatContext *s1)
         return AVERROR(EIO);
     }
     s->buf = av_malloc(s1->packet_size);
-    if (s->buf == NULL) {
+    if (!s->buf) {
         return AVERROR(ENOMEM);
     }
     s->max_payload_size = s1->packet_size - 12;
@@ -165,7 +165,12 @@ static int rtp_write_header(AVFormatContext *s1)
         }
         if (st->codec->codec_type == AVMEDIA_TYPE_VIDEO) {
             /* FIXME: We should round down here... */
-            s->max_frames_per_packet = av_rescale_q(s1->max_delay, (AVRational){1, 1000000}, st->codec->time_base);
+            if (st->avg_frame_rate.num > 0 && st->avg_frame_rate.den > 0) {
+                s->max_frames_per_packet = av_rescale_q(s1->max_delay,
+                                                        (AVRational){1, 1000000},
+                                                        av_inv_q(st->avg_frame_rate));
+            } else
+                s->max_frames_per_packet = 1;
         }
     }
 
@@ -554,8 +559,13 @@ static int rtp_write_packet(AVFormatContext *s1, AVPacket *pkt)
             const uint8_t *mb_info =
                 av_packet_get_side_data(pkt, AV_PKT_DATA_H263_MB_INFO,
                                         &mb_info_size);
-            ff_rtp_send_h263_rfc2190(s1, pkt->data, size, mb_info, mb_info_size);
-            break;
+            if (!mb_info) {
+                av_log(s1, AV_LOG_WARNING, "No MB info found.\n");
+            } else {
+                ff_rtp_send_h263_rfc2190(s1, pkt->data, size,
+                                         mb_info, mb_info_size);
+                break;
+            }
         }
         /* Fallthrough */
     case AV_CODEC_ID_H263P:

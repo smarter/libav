@@ -109,8 +109,8 @@ Select the desired subtitle stream number, counting from 0. The number
 refers to the list of all the input subtitle streams. If it is greater
 than the number of subtitle streams minus one, then the last one is
 selected, if it is negative the subtitle rendering is disabled.
-@item -autoexit
-Exit when video is done playing.
+@item -noautoexit
+Do not exit after playback is finished.
 @item -exitonkeydown
 Exit if any key is pressed.
 @item -exitonmousedown
@@ -147,6 +147,9 @@ Seek backward/forward 10 seconds.
 @item down/up
 Seek backward/forward 1 minute.
 
+@item PGDOWN/PGUP
+Seek to the previous/next chapter.
+
 @item mouse click
 Seek to percentage in file corresponding to fraction of width.
 
@@ -155,6 +158,7 @@ Seek to percentage in file corresponding to fraction of width.
 @c man end
 
 @include eval.texi
+@include decoders.texi
 @include demuxers.texi
 @include muxers.texi
 @include indevs.texi

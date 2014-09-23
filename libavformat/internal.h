@@ -42,6 +42,14 @@ typedef struct CodecMime{
     enum AVCodecID id;
 } CodecMime;
 
+struct AVFormatInternal {
+    /**
+     * Number of streams relevant for interleaving.
+     * Muxing only.
+     */
+    int nb_interleaved_streams;
+};
+
 void ff_dynarray_add(intptr_t **tab_ptr, int *nb_ptr, intptr_t elem);
 
 #ifdef __GNUC__
@@ -79,8 +87,8 @@ void ff_program_add_stream_index(AVFormatContext *ac, int progid, unsigned int i
  * Add packet to AVFormatContext->packet_buffer list, determining its
  * interleaved position using compare() function argument.
  */
-void ff_interleave_add_packet(AVFormatContext *s, AVPacket *pkt,
-                              int (*compare)(AVFormatContext *, AVPacket *, AVPacket *));
+int ff_interleave_add_packet(AVFormatContext *s, AVPacket *pkt,
+                             int (*compare)(AVFormatContext *, AVPacket *, AVPacket *));
 
 void ff_read_frame_flush(AVFormatContext *s);
 
@@ -317,8 +325,6 @@ int ff_interleave_packet_per_dts(AVFormatContext *s, AVPacket *out,
  */
 void ff_compute_frame_duration(int *pnum, int *pden, AVStream *st,
                                AVCodecParserContext *pc, AVPacket *pkt);
-
-int ff_get_audio_frame_size(AVCodecContext *enc, int size, int mux);
 
 unsigned int ff_codec_get_tag(const AVCodecTag *tags, enum AVCodecID id);
 

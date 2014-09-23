@@ -40,7 +40,7 @@
 #include "internal.h"
 #include "video.h"
 
-typedef struct {
+typedef struct BufferSourceContext {
     const AVClass    *class;
     AVFifoBuffer     *fifo;
     AVRational        time_base;     ///< time_base to set in the output link
@@ -94,13 +94,15 @@ int attribute_align_arg av_buffersrc_add_frame(AVFilterContext *ctx,
 {
     BufferSourceContext *s = ctx->priv;
     AVFrame *copy;
-    int ret;
+    int refcounted, ret;
 
     if (!frame) {
         s->eof = 1;
         return 0;
     } else if (s->eof)
         return AVERROR(EINVAL);
+
+    refcounted = !!frame->buf[0];
 
     switch (ctx->outputs[0]->type) {
     case AVMEDIA_TYPE_VIDEO:
@@ -122,10 +124,20 @@ int attribute_align_arg av_buffersrc_add_frame(AVFilterContext *ctx,
 
     if (!(copy = av_frame_alloc()))
         return AVERROR(ENOMEM);
-    av_frame_move_ref(copy, frame);
+
+    if (refcounted) {
+        av_frame_move_ref(copy, frame);
+    } else {
+        ret = av_frame_ref(copy, frame);
+        if (ret < 0) {
+            av_frame_free(&copy);
+            return ret;
+        }
+    }
 
     if ((ret = av_fifo_generic_write(s->fifo, &copy, sizeof(copy), NULL)) < 0) {
-        av_frame_move_ref(frame, copy);
+        if (refcounted)
+            av_frame_move_ref(frame, copy);
         av_frame_free(&copy);
         return ret;
     }
@@ -252,7 +264,7 @@ static av_cold int init_video(AVFilterContext *ctx)
     if ((c->pix_fmt = av_get_pix_fmt(c->pix_fmt_str)) == AV_PIX_FMT_NONE) {
         char *tail;
         c->pix_fmt = strtol(c->pix_fmt_str, &tail, 10);
-        if (*tail || c->pix_fmt < 0 || c->pix_fmt >= AV_PIX_FMT_NB) {
+        if (*tail || c->pix_fmt < 0 || !av_pix_fmt_desc_get(c->pix_fmt)) {
             av_log(ctx, AV_LOG_ERROR, "Invalid pixel format string '%s'\n", c->pix_fmt_str);
             return AVERROR(EINVAL);
         }

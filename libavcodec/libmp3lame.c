@@ -48,6 +48,8 @@ typedef struct LAMEContext {
     int buffer_index;
     int buffer_size;
     int reservoir;
+    int joint_stereo;
+    int abr;
     float *samples_flt[2];
     AudioFrameQueue afq;
     AVFloatDSPContext fdsp;
@@ -57,18 +59,14 @@ typedef struct LAMEContext {
 static int realloc_buffer(LAMEContext *s)
 {
     if (!s->buffer || s->buffer_size - s->buffer_index < BUFFER_SIZE) {
-        uint8_t *tmp;
-        int new_size = s->buffer_index + 2 * BUFFER_SIZE;
+        int new_size = s->buffer_index + 2 * BUFFER_SIZE, err;
 
         av_dlog(s->avctx, "resizing output buffer: %d -> %d\n", s->buffer_size,
                 new_size);
-        tmp = av_realloc(s->buffer, new_size);
-        if (!tmp) {
-            av_freep(&s->buffer);
+        if ((err = av_reallocp(&s->buffer, new_size)) < 0) {
             s->buffer_size = s->buffer_index = 0;
-            return AVERROR(ENOMEM);
+            return err;
         }
-        s->buffer      = tmp;
         s->buffer_size = new_size;
     }
     return 0;
@@ -96,11 +94,11 @@ static av_cold int mp3lame_encode_init(AVCodecContext *avctx)
     s->avctx = avctx;
 
     /* initialize LAME and get defaults */
-    if ((s->gfp = lame_init()) == NULL)
+    if (!(s->gfp = lame_init()))
         return AVERROR(ENOMEM);
 
     lame_set_num_channels(s->gfp, avctx->channels);
-    lame_set_mode(s->gfp, avctx->channels > 1 ? JOINT_STEREO : MONO);
+    lame_set_mode(s->gfp, avctx->channels > 1 ? s->joint_stereo ? JOINT_STEREO : STEREO : MONO);
 
     /* sample rate */
     lame_set_in_samplerate (s->gfp, avctx->sample_rate);
@@ -113,12 +111,17 @@ static av_cold int mp3lame_encode_init(AVCodecContext *avctx)
         lame_set_quality(s->gfp, avctx->compression_level);
 
     /* rate control */
-    if (avctx->flags & CODEC_FLAG_QSCALE) {
+    if (avctx->flags & CODEC_FLAG_QSCALE) { // VBR
         lame_set_VBR(s->gfp, vbr_default);
         lame_set_VBR_quality(s->gfp, avctx->global_quality / (float)FF_QP2LAMBDA);
     } else {
-        if (avctx->bit_rate)
-            lame_set_brate(s->gfp, avctx->bit_rate / 1000);
+        if (avctx->bit_rate) {
+            if (s->abr) {                   // ABR
+                lame_set_VBR(s->gfp, vbr_abr);
+                lame_set_VBR_mean_bitrate_kbps(s->gfp, avctx->bit_rate / 1000);
+            } else                          // CBR
+                lame_set_brate(s->gfp, avctx->bit_rate / 1000);
+        }
     }
 
     /* do not get a Xing VBR header frame from LAME */
@@ -179,6 +182,7 @@ static int mp3lame_encode_frame(AVCodecContext *avctx, AVPacket *avpkt,
     MPADecodeHeader hdr;
     int len, ret, ch;
     int lame_result;
+    uint32_t h;
 
     if (frame) {
         switch (avctx->sample_fmt) {
@@ -234,7 +238,12 @@ static int mp3lame_encode_frame(AVCodecContext *avctx, AVPacket *avpkt,
        determine the frame size. */
     if (s->buffer_index < 4)
         return 0;
-    if (avpriv_mpegaudio_decode_header(&hdr, AV_RB32(s->buffer))) {
+    h = AV_RB32(s->buffer);
+    if (ff_mpa_check_header(h) < 0) {
+        av_log(avctx, AV_LOG_ERROR, "Invalid mp3 header at start of buffer\n");
+        return AVERROR_BUG;
+    }
+    if (avpriv_mpegaudio_decode_header(&hdr, h)) {
         av_log(avctx, AV_LOG_ERROR, "free format output not supported\n");
         return -1;
     }
@@ -264,6 +273,8 @@ static int mp3lame_encode_frame(AVCodecContext *avctx, AVPacket *avpkt,
 #define AE AV_OPT_FLAG_AUDIO_PARAM | AV_OPT_FLAG_ENCODING_PARAM
 static const AVOption options[] = {
     { "reservoir", "Use bit reservoir.", OFFSET(reservoir), AV_OPT_TYPE_INT, { .i64 = 1 }, 0, 1, AE },
+    { "joint_stereo", "Use joint stereo.", OFFSET(joint_stereo), AV_OPT_TYPE_INT, { .i64 = 1 }, 0, 1, AE },
+    { "abr", "Use ABR", OFFSET(abr), AV_OPT_TYPE_INT, { .i64 = 0 }, 0, 1, AE },
     { NULL },
 };
 

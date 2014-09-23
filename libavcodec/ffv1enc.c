@@ -559,8 +559,12 @@ static av_cold int init_slices_state(FFV1Context *f)
 static av_cold int ffv1_encode_init(AVCodecContext *avctx)
 {
     FFV1Context *s = avctx->priv_data;
-    const AVPixFmtDescriptor *desc = av_pix_fmt_desc_get(avctx->pix_fmt);
+    const AVPixFmtDescriptor *desc;
     int i, j, k, m, ret;
+
+    desc = av_pix_fmt_desc_get(avctx->pix_fmt);
+    if (!desc)
+        return AVERROR_BUG;
 
     ffv1_common_init(avctx);
 
@@ -590,31 +594,21 @@ static av_cold int ffv1_encode_init(AVCodecContext *avctx)
     s->ac = avctx->coder_type > 0 ? 2 : 0;
 
     s->plane_count = 3;
+    s->transparency = !!(desc->flags & AV_PIX_FMT_FLAG_ALPHA);
+    s->version = FFMAX(s->version, 1);
     switch (avctx->pix_fmt) {
     case AV_PIX_FMT_YUV444P9:
     case AV_PIX_FMT_YUV422P9:
     case AV_PIX_FMT_YUV420P9:
-        if (!avctx->bits_per_raw_sample)
-            s->bits_per_raw_sample = 9;
     case AV_PIX_FMT_YUV444P10:
     case AV_PIX_FMT_YUV420P10:
     case AV_PIX_FMT_YUV422P10:
         s->packed_at_lsb = 1;
-        if (!avctx->bits_per_raw_sample && !s->bits_per_raw_sample)
-            s->bits_per_raw_sample = 10;
+        /* fall-through */
     case AV_PIX_FMT_GRAY16:
     case AV_PIX_FMT_YUV444P16:
     case AV_PIX_FMT_YUV422P16:
     case AV_PIX_FMT_YUV420P16:
-        if (!avctx->bits_per_raw_sample && !s->bits_per_raw_sample) {
-            s->bits_per_raw_sample = 16;
-        } else if (!s->bits_per_raw_sample) {
-            s->bits_per_raw_sample = avctx->bits_per_raw_sample;
-        }
-        if (s->bits_per_raw_sample <= 8) {
-            av_log(avctx, AV_LOG_ERROR, "bits_per_raw_sample invalid\n");
-            return AVERROR_INVALIDDATA;
-        }
         if (!s->ac && avctx->coder_type == -1) {
             av_log(avctx, AV_LOG_INFO,
                    "bits_per_raw_sample > 8, forcing coder 1\n");
@@ -626,7 +620,7 @@ static av_cold int ffv1_encode_init(AVCodecContext *avctx)
                 "bits_per_raw_sample of more than 8 needs -coder 1 currently\n");
             return AVERROR_INVALIDDATA;
         }
-        s->version = FFMAX(s->version, 1);
+        /* fall-through */
     case AV_PIX_FMT_GRAY8:
     case AV_PIX_FMT_YUV444P:
     case AV_PIX_FMT_YUV440P:
@@ -634,34 +628,21 @@ static av_cold int ffv1_encode_init(AVCodecContext *avctx)
     case AV_PIX_FMT_YUV420P:
     case AV_PIX_FMT_YUV411P:
     case AV_PIX_FMT_YUV410P:
-        s->chroma_planes = desc->nb_components < 3 ? 0 : 1;
-        s->colorspace    = 0;
-        break;
     case AV_PIX_FMT_YUVA444P:
     case AV_PIX_FMT_YUVA422P:
     case AV_PIX_FMT_YUVA420P:
-        s->chroma_planes = 1;
+        s->chroma_planes = desc->nb_components < 3 ? 0 : 1;
         s->colorspace    = 0;
-        s->transparency  = 1;
         break;
     case AV_PIX_FMT_RGB32:
         s->colorspace   = 1;
-        s->transparency = 1;
         break;
     case AV_PIX_FMT_GBRP9:
-        if (!avctx->bits_per_raw_sample)
-            s->bits_per_raw_sample = 9;
     case AV_PIX_FMT_GBRP10:
-        if (!avctx->bits_per_raw_sample && !s->bits_per_raw_sample)
-            s->bits_per_raw_sample = 10;
     case AV_PIX_FMT_GBRP16:
-        if (!avctx->bits_per_raw_sample && !s->bits_per_raw_sample)
-            s->bits_per_raw_sample = 16;
-        else if (!s->bits_per_raw_sample)
-            s->bits_per_raw_sample = avctx->bits_per_raw_sample;
+        s->bits_per_raw_sample = desc->comp[0].depth_minus1 + 1;
         s->colorspace    = 1;
         s->chroma_planes = 1;
-        s->version       = FFMAX(s->version, 1);
         break;
     default:
         av_log(avctx, AV_LOG_ERROR, "format not supported\n");
@@ -721,7 +702,12 @@ static av_cold int ffv1_encode_init(AVCodecContext *avctx)
     if ((ret = ffv1_allocate_initial_states(s)) < 0)
         return ret;
 
-    avctx->coded_frame = &s->picture;
+    avctx->coded_frame = av_frame_alloc();
+    if (!avctx->coded_frame)
+        return AVERROR(ENOMEM);
+
+    avctx->coded_frame->pict_type = AV_PICTURE_TYPE_I;
+
     if (!s->transparency)
         s->plane_count = 2;
 
@@ -858,12 +844,12 @@ static void encode_slice_header(FFV1Context *f, FFV1Context *fs)
         put_symbol(c, state, f->plane[j].quant_table_index, 0);
         av_assert0(f->plane[j].quant_table_index == f->avctx->context_model);
     }
-    if (!f->picture.interlaced_frame)
+    if (!f->avctx->coded_frame->interlaced_frame)
         put_symbol(c, state, 3, 0);
     else
-        put_symbol(c, state, 1 + !f->picture.top_field_first, 0);
-    put_symbol(c, state, f->picture.sample_aspect_ratio.num, 0);
-    put_symbol(c, state, f->picture.sample_aspect_ratio.den, 0);
+        put_symbol(c, state, 1 + !f->avctx->coded_frame->top_field_first, 0);
+    put_symbol(c, state, f->avctx->coded_frame->sample_aspect_ratio.num, 0);
+    put_symbol(c, state, f->avctx->coded_frame->sample_aspect_ratio.den, 0);
 }
 
 static int encode_slice(AVCodecContext *c, void *arg)
@@ -874,12 +860,12 @@ static int encode_slice(AVCodecContext *c, void *arg)
     int height       = fs->slice_height;
     int x            = fs->slice_x;
     int y            = fs->slice_y;
-    AVFrame *const p = &f->picture;
+    const AVFrame *const p = f->frame;
     const int ps     = (av_pix_fmt_desc_get(c->pix_fmt)->flags & AV_PIX_FMT_FLAG_PLANAR)
                        ? (f->bits_per_raw_sample > 8) + 1
                        : 4;
 
-    if (p->key_frame)
+    if (c->coded_frame->key_frame)
         ffv1_clear_slice_state(f, fs);
     if (f->version > 2) {
         encode_slice_header(f, fs);
@@ -926,11 +912,13 @@ static int ffv1_encode_frame(AVCodecContext *avctx, AVPacket *pkt,
 {
     FFV1Context *f      = avctx->priv_data;
     RangeCoder *const c = &f->slice_context[0]->c;
-    AVFrame *const p    = &f->picture;
+    AVFrame *const p    = avctx->coded_frame;
     int used_count      = 0;
     uint8_t keystate    = 128;
     uint8_t *buf_p;
     int i, ret;
+
+    f->frame = pict;
 
     if ((ret = ff_alloc_packet(pkt, avctx->width * avctx->height *
                              ((8 * 2 + 1 + 1) * 4) / 8 +
@@ -941,9 +929,6 @@ static int ffv1_encode_frame(AVCodecContext *avctx, AVPacket *pkt,
 
     ff_init_range_encoder(c, pkt->data, pkt->size);
     ff_build_rac_states(c, 0.05 * (1LL << 32), 256 - 8);
-
-    *p           = *pict;
-    p->pict_type = AV_PICTURE_TYPE_I;
 
     if (avctx->gop_size == 0 || f->picture_number % avctx->gop_size == 0) {
         put_rac(c, &keystate, 1);
@@ -1054,6 +1039,13 @@ static int ffv1_encode_frame(AVCodecContext *avctx, AVPacket *pkt,
     return 0;
 }
 
+static av_cold int ffv1_encode_close(AVCodecContext *avctx)
+{
+    av_frame_free(&avctx->coded_frame);
+    ffv1_close(avctx);
+    return 0;
+}
+
 #define OFFSET(x) offsetof(FFV1Context, x)
 #define VE AV_OPT_FLAG_VIDEO_PARAM | AV_OPT_FLAG_ENCODING_PARAM
 static const AVOption options[] = {
@@ -1082,7 +1074,7 @@ AVCodec ff_ffv1_encoder = {
     .priv_data_size = sizeof(FFV1Context),
     .init           = ffv1_encode_init,
     .encode2        = ffv1_encode_frame,
-    .close          = ffv1_close,
+    .close          = ffv1_encode_close,
     .capabilities   = CODEC_CAP_SLICE_THREADS,
     .pix_fmts       = (const enum AVPixelFormat[]) {
         AV_PIX_FMT_YUV420P,   AV_PIX_FMT_YUV422P,   AV_PIX_FMT_YUV444P,

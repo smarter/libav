@@ -38,12 +38,10 @@
  * @{
  */
 
-int ff_vdpau_common_start_frame(Picture *pic,
+int ff_vdpau_common_start_frame(struct vdpau_picture_context *pic_ctx,
                                 av_unused const uint8_t *buffer,
                                 av_unused uint32_t size)
 {
-    struct vdpau_picture_context *pic_ctx = pic->hwaccel_picture_private;
-
     pic_ctx->bitstream_buffers_allocated = 0;
     pic_ctx->bitstream_buffers_used      = 0;
     pic_ctx->bitstream_buffers           = NULL;
@@ -59,7 +57,7 @@ int ff_vdpau_mpeg_end_frame(AVCodecContext *avctx)
     MpegEncContext *s = avctx->priv_data;
     Picture *pic = s->current_picture_ptr;
     struct vdpau_picture_context *pic_ctx = pic->hwaccel_picture_private;
-    VdpVideoSurface surf = ff_vdpau_get_surface_id(pic);
+    VdpVideoSurface surf = ff_vdpau_get_surface_id(pic->f);
 
     hwctx->render(hwctx->decoder, surf, (void *)&pic_ctx->info,
                   pic_ctx->bitstream_buffers_used, pic_ctx->bitstream_buffers);
@@ -71,9 +69,9 @@ int ff_vdpau_mpeg_end_frame(AVCodecContext *avctx)
 }
 #endif
 
-int ff_vdpau_add_buffer(Picture *pic, const uint8_t *buf, uint32_t size)
+int ff_vdpau_add_buffer(struct vdpau_picture_context *pic_ctx,
+                        const uint8_t *buf, uint32_t size)
 {
-    struct vdpau_picture_context *pic_ctx = pic->hwaccel_picture_private;
     VdpBitstreamBuffer *buffers = pic_ctx->bitstream_buffers;
 
     buffers = av_fast_realloc(buffers, &pic_ctx->bitstream_buffers_allocated,
@@ -114,7 +112,7 @@ do {                        \
         default:                               return AVERROR(EINVAL);
         }
     case AV_CODEC_ID_H264:
-        switch (avctx->profile) {
+        switch (avctx->profile & ~FF_PROFILE_H264_INTRA) {
         case FF_PROFILE_H264_CONSTRAINED_BASELINE:
         case FF_PROFILE_H264_BASELINE:         PROFILE(VDP_DECODER_PROFILE_H264_BASELINE);
         case FF_PROFILE_H264_MAIN:             PROFILE(VDP_DECODER_PROFILE_H264_MAIN);

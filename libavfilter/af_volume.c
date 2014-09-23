@@ -28,7 +28,10 @@
 #include "libavutil/common.h"
 #include "libavutil/eval.h"
 #include "libavutil/float_dsp.h"
+#include "libavutil/intreadwrite.h"
 #include "libavutil/opt.h"
+#include "libavutil/replaygain.h"
+
 #include "audio.h"
 #include "avfilter.h"
 #include "formats.h"
@@ -50,6 +53,16 @@ static const AVOption options[] = {
         { "fixed",  "8-bit fixed-point.",     0, AV_OPT_TYPE_CONST, { .i64 = PRECISION_FIXED  }, INT_MIN, INT_MAX, A, "precision" },
         { "float",  "32-bit floating-point.", 0, AV_OPT_TYPE_CONST, { .i64 = PRECISION_FLOAT  }, INT_MIN, INT_MAX, A, "precision" },
         { "double", "64-bit floating-point.", 0, AV_OPT_TYPE_CONST, { .i64 = PRECISION_DOUBLE }, INT_MIN, INT_MAX, A, "precision" },
+    { "replaygain", "Apply replaygain side data when present",
+            OFFSET(replaygain), AV_OPT_TYPE_INT, { .i64 = REPLAYGAIN_DROP }, REPLAYGAIN_DROP, REPLAYGAIN_ALBUM, A, "replaygain" },
+        { "drop",   "replaygain side data is dropped", 0, AV_OPT_TYPE_CONST, { .i64 = REPLAYGAIN_DROP   }, 0, 0, A, "replaygain" },
+        { "ignore", "replaygain side data is ignored", 0, AV_OPT_TYPE_CONST, { .i64 = REPLAYGAIN_IGNORE }, 0, 0, A, "replaygain" },
+        { "track",  "track gain is preferred",         0, AV_OPT_TYPE_CONST, { .i64 = REPLAYGAIN_TRACK  }, 0, 0, A, "replaygain" },
+        { "album",  "album gain is preferred",         0, AV_OPT_TYPE_CONST, { .i64 = REPLAYGAIN_ALBUM  }, 0, 0, A, "replaygain" },
+    { "replaygain_preamp", "Apply replaygain pre-amplification",
+            OFFSET(replaygain_preamp), AV_OPT_TYPE_DOUBLE, { .dbl = 0.0 }, -15.0, 15.0, A },
+    { "replaygain_noclip", "Apply replaygain clipping prevention",
+            OFFSET(replaygain_noclip), AV_OPT_TYPE_INT, { .i64 = 1 }, 0, 1, A },
     { NULL },
 };
 
@@ -229,6 +242,46 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *buf)
     AVFilterLink *outlink = inlink->dst->outputs[0];
     int nb_samples        = buf->nb_samples;
     AVFrame *out_buf;
+    AVFrameSideData *sd = av_frame_get_side_data(buf, AV_FRAME_DATA_REPLAYGAIN);
+    int ret;
+
+    if (sd && vol->replaygain != REPLAYGAIN_IGNORE) {
+        if (vol->replaygain != REPLAYGAIN_DROP) {
+            AVReplayGain *replaygain = (AVReplayGain*)sd->data;
+            int32_t gain  = 100000;
+            uint32_t peak = 100000;
+            float g, p;
+
+            if (vol->replaygain == REPLAYGAIN_TRACK &&
+                replaygain->track_gain != INT32_MIN) {
+                gain = replaygain->track_gain;
+
+                if (replaygain->track_peak != 0)
+                    peak = replaygain->track_peak;
+            } else if (replaygain->album_gain != INT32_MIN) {
+                gain = replaygain->album_gain;
+
+                if (replaygain->album_peak != 0)
+                    peak = replaygain->album_peak;
+            } else {
+                av_log(inlink->dst, AV_LOG_WARNING, "Both ReplayGain gain "
+                       "values are unknown.\n");
+            }
+            g = gain / 100000.0f;
+            p = peak / 100000.0f;
+
+            av_log(inlink->dst, AV_LOG_VERBOSE,
+                   "Using gain %f dB from replaygain side data.\n", g);
+
+            vol->volume   = pow(10, (g + vol->replaygain_preamp) / 20);
+            if (vol->replaygain_noclip)
+                vol->volume = FFMIN(vol->volume, 1.0 / p);
+            vol->volume_i = (int)(vol->volume * 256 + 0.5);
+
+            volume_init(vol);
+        }
+        av_frame_remove_side_data(buf, AV_FRAME_DATA_REPLAYGAIN);
+    }
 
     if (vol->volume == 1.0 || vol->volume_i == 256)
         return ff_filter_frame(outlink, buf);
@@ -240,7 +293,12 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *buf)
         out_buf = ff_get_audio_buffer(inlink, nb_samples);
         if (!out_buf)
             return AVERROR(ENOMEM);
-        out_buf->pts = buf->pts;
+        ret = av_frame_copy_props(out_buf, buf);
+        if (ret < 0) {
+            av_frame_free(&out_buf);
+            av_frame_free(&buf);
+            return ret;
+        }
     }
 
     if (vol->precision != PRECISION_FIXED || vol->volume_i > 0) {
@@ -271,6 +329,8 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *buf)
             }
         }
     }
+
+    emms_c();
 
     if (buf != out_buf)
         av_frame_free(&buf);

@@ -154,8 +154,11 @@ static void get_private_data(OutputStream *os)
     if (!ptr)
         return;
     os->private_str = av_mallocz(2*size + 1);
+    if (!os->private_str)
+        goto fail;
     for (i = 0; i < size; i++)
         snprintf(&os->private_str[2*i], 3, "%02x", ptr[i]);
+fail:
     if (ptr != codec->extradata)
         av_free(ptr);
 }
@@ -289,7 +292,10 @@ static int ism_write_header(AVFormatContext *s)
     int ret = 0, i;
     AVOutputFormat *oformat;
 
-    mkdir(s->filename, 0777);
+    if (mkdir(s->filename, 0777) == -1 && errno != EEXIST) {
+        ret = AVERROR(errno);
+        goto fail;
+    }
 
     oformat = av_guess_format("ismv", NULL, NULL);
     if (!oformat) {
@@ -316,7 +322,10 @@ static int ism_write_header(AVFormatContext *s)
             goto fail;
         }
         snprintf(os->dirname, sizeof(os->dirname), "%s/QualityLevels(%d)", s->filename, s->streams[i]->codec->bit_rate);
-        mkdir(os->dirname, 0777);
+        if (mkdir(os->dirname, 0777) == -1 && errno != EEXIST) {
+            ret = AVERROR(errno);
+            goto fail;
+        }
 
         ctx = avformat_alloc_context();
         if (!ctx) {

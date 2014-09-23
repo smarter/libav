@@ -37,8 +37,10 @@
  * - Sound data organized in packets follow the EA3 header
  *   (can be encrypted using the Sony DRM!).
  *
- * CODEC SUPPORT: Only ATRAC3 codec is currently supported!
+ * Supported decoders: ATRAC3, ATRAC3+, MP3, LPCM
  */
+
+#include <inttypes.h>
 
 #include "libavutil/channel_layout.h"
 #include "avformat.h"
@@ -219,7 +221,7 @@ static int decrypt_init(AVFormatContext *s, ID3v2ExtraMeta *em, uint8_t *header)
 
     if (geob->datasize < 64) {
         av_log(s, AV_LOG_ERROR,
-               "Invalid GEOB data size: %u\n", geob->datasize);
+               "Invalid GEOB data size: %"PRIu32"\n", geob->datasize);
         return AVERROR_INVALIDDATA;
     }
 
@@ -243,7 +245,7 @@ static int decrypt_init(AVFormatContext *s, ID3v2ExtraMeta *em, uint8_t *header)
         return AVERROR_INVALIDDATA;
     }
     oc->rid = AV_RB32(&gdata[OMA_ENC_HEADER_SIZE + 28]);
-    av_log(s, AV_LOG_DEBUG, "RID: %.8x\n", oc->rid);
+    av_log(s, AV_LOG_DEBUG, "RID: %.8"PRIx32"\n", oc->rid);
 
     memcpy(oc->iv, &header[0x58], 8);
     hex_log(s, AV_LOG_DEBUG, "IV", oc->iv, 8);
@@ -372,7 +374,7 @@ static int oma_read_header(AVFormatContext *s)
         channel_id = (codec_params >> 10) & 7;
         if (!channel_id) {
             av_log(s, AV_LOG_ERROR,
-                   "Invalid ATRAC-X channel id: %d\n", channel_id);
+                   "Invalid ATRAC-X channel id: %"PRIu32"\n", channel_id);
             return AVERROR_INVALIDDATA;
         }
         st->codec->channel_layout = ff_oma_chid_to_native_layout[channel_id - 1];
@@ -386,7 +388,6 @@ static int oma_read_header(AVFormatContext *s)
         st->codec->sample_rate = samplerate;
         st->codec->bit_rate    = samplerate * framesize * 8 / 2048;
         avpriv_set_pts_info(st, 64, 1, samplerate);
-        av_log(s, AV_LOG_ERROR, "Unsupported codec ATRAC3+!\n");
         break;
     case OMA_CODECID_MP3:
         st->need_parsing = AVSTREAM_PARSE_FULL;

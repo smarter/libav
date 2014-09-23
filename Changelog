@@ -1,19 +1,58 @@
 Entries are sorted chronologically from oldest to youngest within each release,
 releases are sorted from youngest to oldest.
 
+version <next>:
+- aliases and defaults for Ogg subtypes (opus, spx)
+- HEVC/H.265 RTP payload format (draft v6) depacketizer
+- avplay now exits by default at the end of playback
+
+
+version 11:
+- libx265 encoder
+- shuffleplanes filter
+- replaygain data export
+- Alias PIX image encoder and decoder
+- BRender PIX image decoder
+- Amazing Studio PAF playback support
+- XBM decoder
+- BMP standalone parser
+- OpenEXR image decoder
+- support encoding and decoding 4-channel SGI images
+- support decoding 16-bit RLE SGI images
+- VP7 video decoder
+- LucasArts SMUSH SANM video decoder
+- LucasArts SMUSH VIMA audio decoder (ADPCM)
+- LucasArts SMUSH demuxer
+- MP2 encoding via TwoLAME
+- asettb filter
+- Silicon Graphics RLE 8-bit video decoder
+- Silicon Graphics Motion Video Compressor 1 & 2 decoder
+- Silicon Graphics Movie demuxer
+- On2 AVC (Audio for Video) decoder
+- support for decoding through DXVA2 in avconv
+- libbs2b-based stereo-to-binaural audio filter
+- native Opus decoder
+- display matrix export and rotation API
+- drop avserver, it was unmaintained for years and largely broken
+- Icecast protocol
+- request Icecast metadata by default
+- support for using metadata in stream specifiers in avtools
+- Matroska 3D support
+
+
 version 10:
 - av_strnstr
 - support ID3v2 tags in ASF files
 - reference-counting for AVFrame and AVPacket data
 - avconv now fails when input options are used for output file
   or vice versa
-- new avconv options -filter_script and -filter_complex_script, which allow a
+- avconv options -filter_script and -filter_complex_script, which allow a
   filtergraph description to be read from a file
 - uniform options syntax across all filters
-- new interlace filter
+- interlace filter
 - JPEG 2000 decoder
-- new asetpts filter (same as setpts, but for audio)
-- new trim and atrim filters
+- asetpts filter (same as setpts, but for audio)
+- trim and atrim filters
 - avconv -t and -ss (output-only) options are now sample-accurate when
   transcoding audio
 - Matroska muxer can now put the index at the beginning of the file.
@@ -32,7 +71,7 @@ version 10:
   the -noaccurate_seek option.
 - avconv -t option can now be used for inputs, to limit the duration of
   data read from an input file
-- incomplete Voxware MetaSound decoder
+- Voxware MetaSound decoder
 - WebP decoder
 - Error Resilient AAC syntax (ER AAC LC) decoding
 - Low Delay AAC (ER AAC LD) decoding
@@ -47,6 +86,17 @@ version 10:
 - Live HDS muxer
 - setsar/setdar filters now support variables in ratio expressions
 - dar variable in the scale filter now returns the actual DAR (i.e. a * sar)
+- VP9 decoder
+- support for decoding through VDPAU in avconv (the -hwaccel option)
+- remove mp3_header_(de)compress bitstream filters
+- stereoscopic 3d metadata handling
+- png standalone parser
+- WebP encoding via libwebp
+- ATRAC3+ decoder
+- framepack filter
+- Mirillis FIC video decoder
+- Support DNx444
+- compand audio filter
 
 
 version 9:

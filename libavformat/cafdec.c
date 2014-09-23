@@ -25,6 +25,8 @@
  * Core Audio Format demuxer
  */
 
+#include <inttypes.h>
+
 #include "avformat.h"
 #include "internal.h"
 #include "isom.h"
@@ -107,10 +109,9 @@ static int read_kuki_chunk(AVFormatContext *s, int64_t size)
            The lavc AAC decoder requires the data from the codec specific
            description as extradata input. */
         int strt, skip;
-        MOVAtom atom;
 
         strt = avio_tell(pb);
-        ff_mov_read_esds(s, pb, atom);
+        ff_mov_read_esds(s, pb);
         skip = size - (avio_tell(pb) - strt);
         if (skip < 0 || !st->codec->extradata ||
             st->codec->codec_id != AV_CODEC_ID_AAC) {
@@ -289,7 +290,8 @@ static int read_header(AVFormatContext *s)
 
         default:
 #define _(x) ((x) >= ' ' ? (x) : ' ')
-            av_log(s, AV_LOG_WARNING, "skipping CAF chunk: %08X (%c%c%c%c)\n",
+            av_log(s, AV_LOG_WARNING,
+                   "skipping CAF chunk: %08"PRIX32" (%"PRIu32"%"PRIu32"%"PRIu32"%"PRIu32")\n",
                 tag, _(tag>>24), _((tag>>16)&0xFF), _((tag>>8)&0xFF), _(tag&0xFF));
 #undef _
         case MKBETAG('f','r','e','e'):

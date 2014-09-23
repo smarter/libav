@@ -26,9 +26,10 @@
  * fixed-point AC-3 encoder.
  */
 
-#define CONFIG_FFT_FLOAT 0
+#define FFT_FLOAT 0
 #undef CONFIG_AC3ENC_FLOAT
 #include "internal.h"
+#include "audiodsp.h"
 #include "ac3enc.h"
 #include "eac3enc.h"
 
@@ -62,17 +63,6 @@ av_cold int AC3_NAME(mdct_init)(AC3EncodeContext *s)
     int ret = ff_mdct_init(&s->mdct, 9, 0, -1.0);
     s->mdct_window = ff_ac3_window;
     return ret;
-}
-
-
-/*
- * Apply KBD window to input samples prior to MDCT.
- */
-static void apply_window(void *dsp, int16_t *output, const int16_t *input,
-                         const int16_t *window, unsigned int len)
-{
-    DSPContext *dsp0 = dsp;
-    dsp0->apply_window_int16(output, input, window, len);
 }
 
 
@@ -111,9 +101,10 @@ static void scale_coefficients(AC3EncodeContext *s)
 /*
  * Clip MDCT coefficients to allowable range.
  */
-static void clip_coefficients(DSPContext *dsp, int32_t *coef, unsigned int len)
+static void clip_coefficients(AudioDSPContext *adsp, int32_t *coef,
+                              unsigned int len)
 {
-    dsp->vector_clip_int32(coef, coef, COEF_MIN, COEF_MAX, len);
+    adsp->vector_clip_int32(coef, coef, COEF_MIN, COEF_MAX, len);
 }
 
 

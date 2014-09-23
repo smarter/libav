@@ -48,7 +48,7 @@ static av_cold int pcm_encode_init(AVCodecContext *avctx)
     avctx->bits_per_coded_sample = av_get_bits_per_sample(avctx->codec->id);
     avctx->block_align           = avctx->channels * avctx->bits_per_coded_sample / 8;
     avctx->bit_rate              = avctx->block_align * avctx->sample_rate * 8;
-    avctx->coded_frame           = avcodec_alloc_frame();
+    avctx->coded_frame           = av_frame_alloc();
     if (!avctx->coded_frame)
         return AVERROR(ENOMEM);
 
@@ -253,7 +253,7 @@ static av_cold int pcm_decode_init(AVCodecContext *avctx)
 #if HAVE_BIGENDIAN
 #define DECODE_PLANAR(size, endian, src, dst, n, shift, offset)         \
     {                                                                   \
-        int av_unused n2;                                               \
+        int n2;                                                         \
         n /= avctx->channels;                                           \
         for (c = 0; c < avctx->channels; c++) {                         \
             samples = frame->extended_data[c];                          \
@@ -264,7 +264,6 @@ static av_cold int pcm_decode_init(AVCodecContext *avctx)
 #else
 #define DECODE_PLANAR(size, endian, src, dst, n, shift, offset)         \
     {                                                                   \
-        int av_unused n2;                                               \
         n /= avctx->channels;                                           \
         for (c = 0; c < avctx->channels; c++) {                         \
             samples = frame->extended_data[c];                          \

@@ -507,7 +507,7 @@ static void mxf_write_identification(AVFormatContext *s)
     mxf_write_metadata_key(pb, 0x013000);
     PRINT_KEY(s, "identification key", pb->buf_ptr - 16);
 
-    version = s->streams[0]->codec->flags & CODEC_FLAG_BITEXACT ?
+    version = s->flags & AVFMT_FLAG_BITEXACT ?
         "0.0.0" : AV_STRINGIFY(LIBAVFORMAT_VERSION);
     length = 84 + (strlen(company)+strlen(product)+strlen(version))*2; // utf-16
     klv_encode_ber_length(pb, length);
@@ -1433,11 +1433,12 @@ static int mxf_write_header(AVFormatContext *s)
                 av_log(s, AV_LOG_ERROR, "video stream must be first track\n");
                 return -1;
             }
-            if (fabs(av_q2d(st->codec->time_base) - 1/25.0) < 0.0001) {
+            // TODO: should be avg_frame_rate
+            if (fabs(av_q2d(st->time_base) - 1/25.0) < 0.0001) {
                 samples_per_frame = PAL_samples_per_frame;
                 mxf->time_base = (AVRational){ 1, 25 };
                 mxf->timecode_base = 25;
-            } else if (fabs(av_q2d(st->codec->time_base) - 1001/30000.0) < 0.0001) {
+            } else if (fabs(av_q2d(st->time_base) - 1001/30000.0) < 0.0001) {
                 samples_per_frame = NTSC_samples_per_frame;
                 mxf->time_base = (AVRational){ 1001, 30000 };
                 mxf->timecode_base = 30;
@@ -1512,7 +1513,7 @@ static int mxf_write_header(AVFormatContext *s)
         mxf->essence_container_count = 1;
     }
 
-    if (!(s->streams[0]->codec->flags & CODEC_FLAG_BITEXACT))
+    if (!(s->flags & AVFMT_FLAG_BITEXACT))
         mxf_gen_umid(s);
 
     for (i = 0; i < s->nb_streams; i++) {

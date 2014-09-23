@@ -54,8 +54,8 @@
 #include "libavutil/lfg.h"
 #include "ac3.h"
 #include "ac3dsp.h"
+#include "bswapdsp.h"
 #include "get_bits.h"
-#include "dsputil.h"
 #include "fft.h"
 #include "fmtconvert.h"
 
@@ -79,14 +79,22 @@ typedef struct AC3DecodeContext {
     int bit_rate;                           ///< stream bit rate, in bits-per-second
     int sample_rate;                        ///< sample frequency, in Hz
     int num_blocks;                         ///< number of audio blocks
+    int bitstream_id;                       ///< bitstream id                           (bsid)
     int bitstream_mode;                     ///< bitstream mode                         (bsmod)
     int channel_mode;                       ///< channel mode                           (acmod)
-    int channel_layout;                     ///< channel layout
     int lfe_on;                             ///< lfe channel in use
     int channel_map;                        ///< custom channel map
+    int preferred_downmix;                  ///< Preferred 2-channel downmix mode       (dmixmod)
     int center_mix_level;                   ///< Center mix level index
+    int center_mix_level_ltrt;              ///< Center mix level index for Lt/Rt       (ltrtcmixlev)
     int surround_mix_level;                 ///< Surround mix level index
+    int surround_mix_level_ltrt;            ///< Surround mix level index for Lt/Rt     (ltrtsurmixlev)
+    int lfe_mix_level_exists;               ///< indicates if lfemixlevcod is specified (lfemixlevcode)
+    int lfe_mix_level;                      ///< LFE mix level index                    (lfemixlevcod)
     int eac3;                               ///< indicates if current frame is E-AC-3
+    int dolby_surround_mode;                ///< dolby surround mode                    (dsurmod)
+    int dolby_surround_ex_mode;             ///< dolby surround ex mode                 (dsurexmod)
+    int dolby_headphone_mode;               ///< dolby headphone mode                   (dheadphonmod)
 ///@}
 
 ///@name Frame syntax parameters
@@ -192,7 +200,7 @@ typedef struct AC3DecodeContext {
 ///@}
 
 ///@name Optimization
-    DSPContext dsp;                         ///< for optimization
+    BswapDSPContext bdsp;
     AVFloatDSPContext fdsp;
     AC3DSPContext ac3dsp;
     FmtConvertContext fmt_conv;             ///< optimized conversion functions

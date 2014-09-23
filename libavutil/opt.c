@@ -213,7 +213,7 @@ int av_opt_set(void *obj, const char *name, const char *val, int search_flags)
     const AVOption *o = av_opt_find2(obj, name, NULL, 0, search_flags, &target_obj);
     if (!o || !target_obj)
         return AVERROR_OPTION_NOT_FOUND;
-    if (!val)
+    if (!val || o->flags & AV_OPT_FLAG_READONLY)
         return AVERROR(EINVAL);
 
     dst = ((uint8_t*)target_obj) + o->offset;
@@ -235,7 +235,7 @@ int av_opt_set(void *obj, const char *name, const char *val, int search_flags)
 #define OPT_EVAL_NUMBER(name, opttype, vartype)\
     int av_opt_eval_ ## name(void *obj, const AVOption *o, const char *val, vartype *name ## _out)\
     {\
-        if (!o || o->type != opttype)\
+        if (!o || o->type != opttype || o->flags & AV_OPT_FLAG_READONLY)\
             return AVERROR(EINVAL);\
         return set_string_number(obj, obj, o, val, name ## _out);\
     }
@@ -255,6 +255,9 @@ static int set_number(void *obj, const char *name, double num, int den, int64_t 
 
     if (!o || !target_obj)
         return AVERROR_OPTION_NOT_FOUND;
+
+    if (o->flags & AV_OPT_FLAG_READONLY)
+        return AVERROR(EINVAL);
 
     dst = ((uint8_t*)target_obj) + o->offset;
     return write_number(obj, o, dst, num, den, intnum);
@@ -286,7 +289,7 @@ int av_opt_set_bin(void *obj, const char *name, const uint8_t *val, int len, int
     if (!o || !target_obj)
         return AVERROR_OPTION_NOT_FOUND;
 
-    if (o->type != AV_OPT_TYPE_BINARY)
+    if (o->type != AV_OPT_TYPE_BINARY || o->flags & AV_OPT_FLAG_READONLY)
         return AVERROR(EINVAL);
 
     ptr = av_malloc(len);
@@ -300,6 +303,24 @@ int av_opt_set_bin(void *obj, const char *name, const uint8_t *val, int len, int
     *dst = ptr;
     *lendst = len;
     memcpy(ptr, val, len);
+
+    return 0;
+}
+
+int av_opt_set_dict_val(void *obj, const char *name, const AVDictionary *val, int search_flags)
+{
+    void *target_obj;
+    AVDictionary **dst;
+    const AVOption *o = av_opt_find2(obj, name, NULL, 0, search_flags, &target_obj);
+
+    if (!o || !target_obj)
+        return AVERROR_OPTION_NOT_FOUND;
+    if (o->flags & AV_OPT_FLAG_READONLY)
+        return AVERROR(EINVAL);
+
+    dst = (AVDictionary **)(((uint8_t *)target_obj) + o->offset);
+    av_dict_free(dst);
+    av_dict_copy(dst, val, 0);
 
     return 0;
 }
@@ -407,6 +428,23 @@ int av_opt_get_q(void *obj, const char *name, int search_flags, AVRational *out_
     return 0;
 }
 
+int av_opt_get_dict_val(void *obj, const char *name, int search_flags, AVDictionary **out_val)
+{
+    void *target_obj;
+    AVDictionary *src;
+    const AVOption *o = av_opt_find2(obj, name, NULL, 0, search_flags, &target_obj);
+
+    if (!o || !target_obj)
+        return AVERROR_OPTION_NOT_FOUND;
+    if (o->type != AV_OPT_TYPE_DICT)
+        return AVERROR(EINVAL);
+
+    src = *(AVDictionary **)(((uint8_t *)target_obj) + o->offset);
+    av_dict_copy(out_val, src, 0);
+
+    return 0;
+}
+
 int av_opt_flag_is_set(void *obj, const char *field_name, const char *flag_name)
 {
     const AVOption *field = av_opt_find(obj, field_name, NULL, 0, 0);
@@ -479,6 +517,8 @@ static void opt_list(void *obj, void *av_log_obj, const char *unit,
         av_log(av_log_obj, AV_LOG_INFO, "%c", (opt->flags & AV_OPT_FLAG_VIDEO_PARAM   ) ? 'V' : '.');
         av_log(av_log_obj, AV_LOG_INFO, "%c", (opt->flags & AV_OPT_FLAG_AUDIO_PARAM   ) ? 'A' : '.');
         av_log(av_log_obj, AV_LOG_INFO, "%c", (opt->flags & AV_OPT_FLAG_SUBTITLE_PARAM) ? 'S' : '.');
+        av_log(av_log_obj, AV_LOG_INFO, "%c", (opt->flags & AV_OPT_FLAG_EXPORT)         ? 'X' : '.');
+        av_log(av_log_obj, AV_LOG_INFO, "%c", (opt->flags & AV_OPT_FLAG_READONLY)       ? 'R' : '.');
 
         if (opt->help)
             av_log(av_log_obj, AV_LOG_INFO, " %s", opt->help);
@@ -504,7 +544,10 @@ int av_opt_show2(void *obj, void *av_log_obj, int req_flags, int rej_flags)
 void av_opt_set_defaults(void *s)
 {
     const AVOption *opt = NULL;
-    while ((opt = av_opt_next(s, opt)) != NULL) {
+    while ((opt = av_opt_next(s, opt))) {
+        if (opt->flags & AV_OPT_FLAG_READONLY)
+            continue;
+
         switch (opt->type) {
             case AV_OPT_TYPE_CONST:
                 /* Nothing to be done here */
@@ -531,7 +574,8 @@ void av_opt_set_defaults(void *s)
                 av_opt_set(s, opt->name, opt->default_val.str, 0);
                 break;
             case AV_OPT_TYPE_BINARY:
-                /* Cannot set default for binary */
+            case AV_OPT_TYPE_DICT:
+                /* Cannot set defaults for these types */
             break;
             default:
                 av_log(s, AV_LOG_DEBUG, "AVOption type %d of option %s not implemented yet\n", opt->type, opt->name);
@@ -613,9 +657,21 @@ int av_set_options_string(void *ctx, const char *opts,
 void av_opt_free(void *obj)
 {
     const AVOption *o = NULL;
-    while ((o = av_opt_next(obj, o)))
-        if (o->type == AV_OPT_TYPE_STRING || o->type == AV_OPT_TYPE_BINARY)
+    while ((o = av_opt_next(obj, o))) {
+        switch (o->type) {
+        case AV_OPT_TYPE_STRING:
+        case AV_OPT_TYPE_BINARY:
             av_freep((uint8_t *)obj + o->offset);
+            break;
+
+        case AV_OPT_TYPE_DICT:
+            av_dict_free((AVDictionary **)(((uint8_t *)obj) + o->offset));
+            break;
+
+        default:
+            break;
+        }
+    }
 }
 
 int av_opt_set_dict(void *obj, AVDictionary **options)

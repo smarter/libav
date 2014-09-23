@@ -35,7 +35,7 @@
 #include "get_bits.h"
 #include "huffman.h"
 #include "bytestream.h"
-#include "dsputil.h"
+#include "bswapdsp.h"
 #include "internal.h"
 
 #define FPS_TAG MKTAG('F', 'P', 'S', 'x')
@@ -45,10 +45,10 @@
  */
 typedef struct FrapsContext {
     AVCodecContext *avctx;
-    AVFrame frame;
+    BswapDSPContext bdsp;
+    AVFrame *frame;
     uint8_t *tmpbuf;
     int tmpbuf_size;
-    DSPContext dsp;
 } FrapsContext;
 
 
@@ -66,9 +66,11 @@ static av_cold int decode_init(AVCodecContext *avctx)
     s->avctx  = avctx;
     s->tmpbuf = NULL;
 
-    avcodec_get_frame_defaults(&s->frame);
+    s->frame = av_frame_alloc();
+    if (!s->frame)
+        return AVERROR(ENOMEM);
 
-    ff_dsputil_init(&s->dsp, avctx);
+    ff_bswapdsp_init(&s->bdsp);
 
     return 0;
 }
@@ -104,7 +106,8 @@ static int fraps2_decode_plane(FrapsContext *s, uint8_t *dst, int stride, int w,
     /* we have built Huffman table and are ready to decode plane */
 
     /* convert bits so they may be used by standard bitreader */
-    s->dsp.bswap_buf((uint32_t *)s->tmpbuf, (const uint32_t *)src, size >> 2);
+    s->bdsp.bswap_buf((uint32_t *) s->tmpbuf,
+                      (const uint32_t *) src, size >> 2);
 
     init_get_bits(&gb, s->tmpbuf, size * 8);
     for (j = 0; j < h; j++) {
@@ -136,7 +139,7 @@ static int decode_frame(AVCodecContext *avctx,
     const uint8_t *buf     = avpkt->data;
     int buf_size           = avpkt->size;
     AVFrame *frame         = data;
-    AVFrame * const f      = &s->frame;
+    AVFrame * const f      = s->frame;
     uint32_t header;
     unsigned int version,header_size;
     unsigned int x, y;
@@ -173,6 +176,8 @@ static int decode_frame(AVCodecContext *avctx,
         av_frame_unref(f);
     }
     avctx->pix_fmt = pix_fmt;
+    avctx->color_range = version & 1 ? AVCOL_RANGE_UNSPECIFIED
+                                     : AVCOL_RANGE_JPEG;
 
     expected_size = header_size;
 
@@ -361,7 +366,7 @@ static av_cold int decode_end(AVCodecContext *avctx)
 {
     FrapsContext *s = (FrapsContext*)avctx->priv_data;
 
-    av_frame_unref(&s->frame);
+    av_frame_free(&s->frame);
 
     av_freep(&s->tmpbuf);
     return 0;

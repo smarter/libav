@@ -188,7 +188,7 @@ static av_cold int channelmap_init(AVFilterContext *ctx)
             s->map[i].out_channel_idx = i;
             break;
         case MAP_ONE_STR:
-            if (!get_channel(&mapping, &in_ch, separator)) {
+            if (get_channel(&mapping, &in_ch, separator) < 0) {
                 av_log(ctx, AV_LOG_ERROR, err);
                 return AVERROR(EINVAL);
             }
@@ -341,6 +341,8 @@ static int channelmap_filter_frame(AVFilterLink *inlink, AVFrame *buf)
     if (buf->data != buf->extended_data)
         memcpy(buf->data, buf->extended_data,
            FFMIN(FF_ARRAY_ELEMS(buf->data), nch_out) * sizeof(buf->data[0]));
+
+    buf->channel_layout = outlink->channel_layout;
 
     return ff_filter_frame(outlink, buf);
 }

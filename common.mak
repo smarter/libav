@@ -8,13 +8,12 @@ all: all-yes
 include $(SRC_PATH)/arch.mak
 
 OBJS      += $(OBJS-yes)
-FFLIBS    := $(FFLIBS-yes) $(FFLIBS)
+FFLIBS    := $($(NAME)_FFLIBS) $(FFLIBS-yes) $(FFLIBS)
 TESTPROGS += $(TESTPROGS-yes)
 
 LDLIBS       = $(FFLIBS:%=%$(BUILDSUF))
 FFEXTRALIBS := $(LDLIBS:%=$(LD_LIB)) $(EXTRALIBS)
 
-EXAMPLES  := $(EXAMPLES:%=$(SUBDIR)%-example$(EXESUF))
 OBJS      := $(sort $(OBJS:%=$(SUBDIR)%))
 TESTOBJS  := $(TESTOBJS:%=$(SUBDIR)%) $(TESTPROGS:%=$(SUBDIR)%-test.o)
 TESTPROGS := $(TESTPROGS:%=$(SUBDIR)%-test$(EXESUF))
@@ -39,10 +38,10 @@ checkheaders: $(HOBJS)
 alltools: $(TOOLS)
 
 $(HOSTOBJS): %.o: %.c
-	$(call COMPILE,HOSTCC)
+	$(COMPILE_HOSTC)
 
 $(HOSTPROGS): %$(HOSTEXESUF): %.o
-	$(HOSTLD) $(HOSTLDFLAGS) $(HOSTLD_O) $< $(HOSTLIBS)
+	$(HOSTLD) $(HOSTLDFLAGS) $(HOSTLD_O) $^ $(HOSTLIBS)
 
 $(OBJS):     | $(sort $(dir $(OBJS)))
 $(HOBJS):    | $(sort $(dir $(HOBJS)))

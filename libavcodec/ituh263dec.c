@@ -36,6 +36,7 @@
 #include "mpegvideo.h"
 #include "h263.h"
 #include "mathops.h"
+#include "mpegutils.h"
 #include "unary.h"
 #include "flv.h"
 #include "mpeg4video.h"
@@ -235,7 +236,7 @@ int ff_h263_resync(MpegEncContext *s){
     if(show_bits(&s->gb, 16)==0){
         pos= get_bits_count(&s->gb);
         if(CONFIG_MPEG4_DECODER && s->codec_id==AV_CODEC_ID_MPEG4)
-            ret= ff_mpeg4_decode_video_packet_header(s);
+            ret= ff_mpeg4_decode_video_packet_header(s->avctx->priv_data);
         else
             ret= h263_decode_gob_header(s);
         if(ret>=0)
@@ -252,7 +253,7 @@ int ff_h263_resync(MpegEncContext *s){
 
             pos= get_bits_count(&s->gb);
             if(CONFIG_MPEG4_DECODER && s->codec_id==AV_CODEC_ID_MPEG4)
-                ret= ff_mpeg4_decode_video_packet_header(s);
+                ret= ff_mpeg4_decode_video_packet_header(s->avctx->priv_data);
             else
                 ret= h263_decode_gob_header(s);
             if(ret>=0)
@@ -537,7 +538,7 @@ retry:
                 rl = &ff_rl_intra_aic;
                 i = 0;
                 s->gb= gb;
-                s->dsp.clear_block(block);
+                s->bdsp.clear_block(block);
                 goto retry;
             }
             av_log(s->avctx, AV_LOG_ERROR, "run overflow at %dx%d i:%d\n", s->mb_x, s->mb_y, s->mb_intra);
@@ -627,7 +628,7 @@ int ff_h263_decode_mb(MpegEncContext *s,
             }
         }while(cbpc == 20);
 
-        s->dsp.clear_blocks(s->block[0]);
+        s->bdsp.clear_blocks(s->block[0]);
 
         dquant = cbpc & 8;
         s->mb_intra = ((cbpc & 4) != 0);
@@ -722,7 +723,7 @@ int ff_h263_decode_mb(MpegEncContext *s,
 
         s->mb_intra = IS_INTRA(mb_type);
         if(HAS_CBP(mb_type)){
-            s->dsp.clear_blocks(s->block[0]);
+            s->bdsp.clear_blocks(s->block[0]);
             cbpc = get_vlc2(&s->gb, cbpc_b_vlc.table, CBPC_B_VLC_BITS, 1);
             if(s->mb_intra){
                 dquant = IS_QUANT(mb_type);
@@ -750,6 +751,8 @@ int ff_h263_decode_mb(MpegEncContext *s,
         }
 
         if(IS_DIRECT(mb_type)){
+            if (!s->pp_time)
+                return AVERROR_INVALIDDATA;
             s->mv_dir = MV_DIR_FORWARD | MV_DIR_BACKWARD | MV_DIRECT;
             mb_type |= ff_mpeg4_set_direct_mv(s, 0, 0);
         }else{
@@ -794,7 +797,7 @@ int ff_h263_decode_mb(MpegEncContext *s,
             }
         }while(cbpc == 8);
 
-        s->dsp.clear_blocks(s->block[0]);
+        s->bdsp.clear_blocks(s->block[0]);
 
         dquant = cbpc & 4;
         s->mb_intra = 1;

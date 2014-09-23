@@ -20,7 +20,7 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#include "hevc.h"
+#include "hevcdsp.h"
 
 static const int8_t transform[32][32] = {
     { 64,  64,  64,  64,  64,  64,  64,  64,  64,  64,  64,  64,  64,  64,  64,  64,
@@ -187,4 +187,7 @@ void ff_hevc_dsp_init(HEVCDSPContext *hevcdsp, int bit_depth)
         HEVC_DSP(8);
         break;
     }
+
+    if (ARCH_X86)
+        ff_hevc_dsp_init_x86(hevcdsp, bit_depth);
 }

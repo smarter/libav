@@ -18,8 +18,8 @@
  * License along with Libav; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
+
 #include "avcodec.h"
-#include "dsputil.h"
 #include "get_bits.h"
 #include "bytestream.h"
 #include "libavutil/colorspace.h"
@@ -31,7 +31,7 @@
 #define DVBSUB_DISPLAYDEFINITION_SEGMENT 0x14
 #define DVBSUB_DISPLAY_SEGMENT  0x80
 
-#define cm (ff_cropTbl + MAX_NEG_CROP)
+#define cm (ff_crop_tab + MAX_NEG_CROP)
 
 #ifdef DEBUG
 #if 0

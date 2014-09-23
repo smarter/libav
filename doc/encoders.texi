@@ -14,7 +14,7 @@ You can disable all the encoders with the configure option
 with the options @code{--enable-encoder=@var{ENCODER}} /
 @code{--disable-encoder=@var{ENCODER}}.
 
-The option @code{-codecs} of the av* tools will display the list of
+The option @code{-encoders} of the av* tools will display the list of
 enabled encoders.
 
 @c man end ENCODERS
@@ -446,6 +446,117 @@ Same as 3, but with extra processing enabled - corresponding to the wavpack
 @chapter Video Encoders
 @c man begin VIDEO ENCODERS
 
+@section libwebp
+
+libwebp WebP Image encoder wrapper
+
+libwebp is Google's official encoder for WebP images. It can encode in either
+lossy or lossless mode. Lossy images are essentially a wrapper around a VP8
+frame. Lossless images are a separate codec developed by Google.
+
+@subsection Pixel Format
+
+Currently, libwebp only supports YUV420 for lossy and RGB for lossless due
+to limitations of the format and libwebp. Alpha is supported for either mode.
+Because of API limitations, if RGB is passed in when encoding lossy or YUV is
+passed in for encoding lossless, the pixel format will automatically be
+converted using functions from libwebp. This is not ideal and is done only for
+convenience.
+
+@subsection Options
+
+@table @option
+
+@item -lossless @var{boolean}
+Enables/Disables use of lossless mode. Default is 0.
+
+@item -compression_level @var{integer}
+For lossy, this is a quality/speed tradeoff. Higher values give better quality
+for a given size at the cost of increased encoding time. For lossless, this is
+a size/speed tradeoff. Higher values give smaller size at the cost of increased
+encoding time. More specifically, it controls the number of extra algorithms
+and compression tools used, and varies the combination of these tools. This
+maps to the @var{method} option in libwebp. The valid range is 0 to 6.
+Default is 4.
+
+@item -qscale @var{float}
+For lossy encoding, this controls image quality, 0 to 100. For lossless
+encoding, this controls the effort and time spent at compressing more. The
+default value is 75. Note that for usage via libavcodec, this option is called
+@var{global_quality} and must be multiplied by @var{FF_QP2LAMBDA}.
+
+@item -preset @var{type}
+Configuration preset. This does some automatic settings based on the general
+type of the image.
+@table @option
+@item none
+Do not use a preset.
+@item default
+Use the encoder default.
+@item picture
+Digital picture, like portrait, inner shot
+@item photo
+Outdoor photograph, with natural lighting
+@item drawing
+Hand or line drawing, with high-contrast details
+@item icon
+Small-sized colorful images
+@item text
+Text-like
+@end table
+
+@item lumi_aq
+Enable lumi masking adaptive quantization when set to 1. Default is 0
+(disabled).
+
+@item variance_aq
+Enable variance adaptive quantization when set to 1. Default is 0
+(disabled).
+
+When combined with @option{lumi_aq}, the resulting quality will not
+be better than any of the two specified individually. In other
+words, the resulting quality will be the worse one of the two
+effects.
+
+@item ssim
+Set structural similarity (SSIM) displaying method. Possible values:
+
+@table @samp
+@item off
+Disable displaying of SSIM information.
+
+@item avg
+Output average SSIM at the end of encoding to stdout. The format of
+showing the average SSIM is:
+
+@example
+Average SSIM: %f
+@end example
+
+For users who are not familiar with C, %f means a float number, or
+a decimal (e.g. 0.939232).
+
+@item frame
+Output both per-frame SSIM data during encoding and average SSIM at
+the end of encoding to stdout. The format of per-frame information
+is:
+
+@example
+       SSIM: avg: %1.3f min: %1.3f max: %1.3f
+@end example
+
+For users who are not familiar with C, %1.3f means a float number
+rounded to 3 digits after the dot (e.g. 0.932).
+
+@end table
+
+@item ssim_acc
+Set SSIM accuracy. Valid options are integers within the range of
+0-4, while 0 gives the most accurate result and 4 computes the
+fastest.
+
+@end table
+
 @section libx264
 
 x264 H.264/MPEG-4 AVC encoder wrapper
@@ -465,39 +576,53 @@ a list of key=value tuples as accepted by x264_param_parse.
 The following options are supported by the x264 wrapper, the x264-equivalent
 options follow the Libav ones.
 
-@multitable @columnfractions .2 .2
+@multitable {                  } {              } {                           }
 @item b                 @tab bitrate
-Libav @code{b} option is expressed in bits/s, x264 @code{bitrate} in kilobits/s.
+@tab Libav @code{b} option is expressed in bits/s, x264 @code{bitrate} in kilobits/s.
 @item bf                @tab bframes
-Maximum number of B-frames.
+@tab Maximum number of B-frames.
 @item g                 @tab keyint
-Maximum GOP size.
+@tab Maximum GOP size.
 @item qmin              @tab qpmin
+@tab Minimum quantizer scale.
 @item qmax              @tab qpmax
+@tab Maximum quantizer scale.
 @item qdiff             @tab qpstep
+@tab Maximum difference between quantizer scales.
 @item qblur             @tab qblur
+@tab Quantizer curve blur
 @item qcomp             @tab qcomp
+@tab Quantizer curve compression factor
 @item refs              @tab ref
+@tab Number of reference frames each P-frame can use. The range is from @var{0-16}.
 @item sc_threshold      @tab scenecut
+@tab Sets the threshold for the scene change detection.
 @item trellis           @tab trellis
+@tab Performs Trellis quantization to increase efficiency. Enabled by default.
 @item nr                @tab nr
-Noise reduction.
+@tab Noise reduction.
 @item me_range          @tab merange
+@tab Maximum range of the motion search in pixels.
 @item me_method         @tab me
+@tab Full-pixel motion estimation method.
 @item subq              @tab subme
+@tab Sub-pixel motion estimation method.
 @item b_strategy        @tab b-adapt
-@item keyint_min        @tab keyint-min
+@tab Adaptive B-frame placement decision algorithm. Use only on first-pass.
+@item keyint_min        @tab min-keyint
+@tab Minimum GOP size.
 @item coder             @tab cabac
-Set coder to @code{ac} to use CABAC.
+@tab Set coder to @code{ac} to use CABAC.
 @item cmp               @tab chroma-me
-Set to @code{chroma} to use chroma motion estimation.
+@tab Set to @code{chroma} to use chroma motion estimation.
 @item threads           @tab threads
+@tab Number of encoding threads.
 @item thread_type       @tab sliced_threads
-Set to @code{slice} to use sliced threading instead of frame threading.
+@tab Set to @code{slice} to use sliced threading instead of frame threading.
 @item flags -cgop       @tab open-gop
-Set @code{-cgop} to use recovery points to close GOPs.
+@tab Set @code{-cgop} to use recovery points to close GOPs.
 @item rc_init_occupancy @tab vbv-init
-Initial buffer occupancy.
+@tab Initial buffer occupancy.
 @end multitable
 
 @subsection Private Options

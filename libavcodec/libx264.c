@@ -23,6 +23,7 @@
 #include "libavutil/opt.h"
 #include "libavutil/mem.h"
 #include "libavutil/pixdesc.h"
+#include "libavutil/stereo3d.h"
 #include "avcodec.h"
 #include "internal.h"
 
@@ -44,7 +45,6 @@ typedef struct X264Context {
     x264_picture_t  pic;
     uint8_t        *sei;
     int             sei_size;
-    AVFrame         out_pic;
     char *preset;
     char *tune;
     char *profile;
@@ -135,6 +135,7 @@ static int X264_frame(AVCodecContext *ctx, AVPacket *pkt, const AVFrame *frame,
     x264_nal_t *nal;
     int nnal, i, ret;
     x264_picture_t pic_out;
+    AVFrameSideData *side_data;
 
     x264_picture_init( &x4->pic );
     x4->pic.img.i_csp   = x4->params.i_csp;
@@ -164,8 +165,74 @@ static int X264_frame(AVCodecContext *ctx, AVPacket *pkt, const AVFrame *frame,
             x4->params.vui.i_sar_width  = ctx->sample_aspect_ratio.num;
             x264_encoder_reconfig(x4->enc, &x4->params);
         }
-    }
 
+        if (x4->params.rc.i_vbv_buffer_size != ctx->rc_buffer_size / 1000 ||
+            x4->params.rc.i_vbv_max_bitrate != ctx->rc_max_rate    / 1000) {
+            x4->params.rc.i_vbv_buffer_size = ctx->rc_buffer_size / 1000;
+            x4->params.rc.i_vbv_max_bitrate = ctx->rc_max_rate    / 1000;
+            x264_encoder_reconfig(x4->enc, &x4->params);
+        }
+
+        if (x4->params.rc.i_rc_method == X264_RC_ABR &&
+            x4->params.rc.i_bitrate != ctx->bit_rate / 1000) {
+            x4->params.rc.i_bitrate = ctx->bit_rate / 1000;
+            x264_encoder_reconfig(x4->enc, &x4->params);
+        }
+
+        if (x4->crf >= 0 &&
+            x4->params.rc.i_rc_method == X264_RC_CRF &&
+            x4->params.rc.f_rf_constant != x4->crf) {
+            x4->params.rc.f_rf_constant = x4->crf;
+            x264_encoder_reconfig(x4->enc, &x4->params);
+        }
+
+        if (x4->params.rc.i_rc_method == X264_RC_CQP &&
+            x4->params.rc.i_qp_constant != x4->cqp) {
+            x4->params.rc.i_qp_constant = x4->cqp;
+            x264_encoder_reconfig(x4->enc, &x4->params);
+        }
+
+        if (x4->crf_max >= 0 &&
+            x4->params.rc.f_rf_constant_max != x4->crf_max) {
+            x4->params.rc.f_rf_constant_max = x4->crf_max;
+            x264_encoder_reconfig(x4->enc, &x4->params);
+        }
+
+        side_data = av_frame_get_side_data(frame, AV_FRAME_DATA_STEREO3D);
+        if (side_data) {
+            AVStereo3D *stereo = (AVStereo3D *)side_data->data;
+            int fpa_type;
+
+            switch (stereo->type) {
+            case AV_STEREO3D_CHECKERBOARD:
+                fpa_type = 0;
+                break;
+            case AV_STEREO3D_COLUMNS:
+                fpa_type = 1;
+                break;
+            case AV_STEREO3D_LINES:
+                fpa_type = 2;
+                break;
+            case AV_STEREO3D_SIDEBYSIDE:
+                fpa_type = 3;
+                break;
+            case AV_STEREO3D_TOPBOTTOM:
+                fpa_type = 4;
+                break;
+            case AV_STEREO3D_FRAMESEQUENCE:
+                fpa_type = 5;
+                break;
+            default:
+                fpa_type = -1;
+                break;
+            }
+
+            if (fpa_type != x4->params.i_frame_packing) {
+                x4->params.i_frame_packing = fpa_type;
+                x264_encoder_reconfig(x4->enc, &x4->params);
+            }
+        }
+    }
     do {
         if (x264_encoder_encode(x4->enc, &nal, &nnal, frame? &x4->pic: NULL, &pic_out) < 0)
             return -1;
@@ -181,20 +248,20 @@ static int X264_frame(AVCodecContext *ctx, AVPacket *pkt, const AVFrame *frame,
     switch (pic_out.i_type) {
     case X264_TYPE_IDR:
     case X264_TYPE_I:
-        x4->out_pic.pict_type = AV_PICTURE_TYPE_I;
+        ctx->coded_frame->pict_type = AV_PICTURE_TYPE_I;
         break;
     case X264_TYPE_P:
-        x4->out_pic.pict_type = AV_PICTURE_TYPE_P;
+        ctx->coded_frame->pict_type = AV_PICTURE_TYPE_P;
         break;
     case X264_TYPE_B:
     case X264_TYPE_BREF:
-        x4->out_pic.pict_type = AV_PICTURE_TYPE_B;
+        ctx->coded_frame->pict_type = AV_PICTURE_TYPE_B;
         break;
     }
 
     pkt->flags |= AV_PKT_FLAG_KEY*pic_out.b_keyframe;
     if (ret)
-        x4->out_pic.quality = (pic_out.i_qpplus1 - 1) * FF_QP2LAMBDA;
+        ctx->coded_frame->quality = (pic_out.i_qpplus1 - 1) * FF_QP2LAMBDA;
 
     *got_packet = ret;
     return 0;
@@ -209,6 +276,8 @@ static av_cold int X264_close(AVCodecContext *avctx)
 
     if (x4->enc)
         x264_encoder_close(x4->enc);
+
+    av_frame_free(&avctx->coded_frame);
 
     return 0;
 }
@@ -417,7 +486,8 @@ static av_cold int X264_init(AVCodecContext *avctx)
 
     x4->params.i_slice_count  = avctx->slices;
 
-    x4->params.vui.b_fullrange = avctx->pix_fmt == AV_PIX_FMT_YUVJ420P;
+    x4->params.vui.b_fullrange = avctx->pix_fmt == AV_PIX_FMT_YUVJ420P ||
+                                 avctx->color_range == AVCOL_RANGE_JPEG;
 
     if (avctx->flags & CODEC_FLAG_GLOBAL_HEADER)
         x4->params.b_repeat_headers = 0;
@@ -450,7 +520,9 @@ static av_cold int X264_init(AVCodecContext *avctx)
     if (!x4->enc)
         return -1;
 
-    avctx->coded_frame = &x4->out_pic;
+    avctx->coded_frame = av_frame_alloc();
+    if (!avctx->coded_frame)
+        return AVERROR(ENOMEM);
 
     if (avctx->flags & CODEC_FLAG_GLOBAL_HEADER) {
         x264_nal_t *nal;

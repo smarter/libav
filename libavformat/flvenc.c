@@ -205,8 +205,6 @@ static int flv_write_header(AVFormatContext *s)
             if (s->streams[i]->avg_frame_rate.den &&
                 s->streams[i]->avg_frame_rate.num) {
                 framerate = av_q2d(s->streams[i]->avg_frame_rate);
-            } else {
-                framerate = 1 / av_q2d(s->streams[i]->codec->time_base);
             }
             if (video_enc) {
                 av_log(s, AV_LOG_ERROR,
@@ -284,7 +282,7 @@ static int flv_write_header(AVFormatContext *s)
     /* mixed array (hash) with size and string/type/data tuples */
     avio_w8(pb, AMF_DATA_TYPE_MIXEDARRAY);
     metadata_count_pos = avio_tell(pb);
-    metadata_count = 5 * !!video_enc +
+    metadata_count = 4 * !!video_enc +
                      5 * !!audio_enc +
                      1 * !!data_enc  +
                      2; // +2 for duration and file size
@@ -307,8 +305,11 @@ static int flv_write_header(AVFormatContext *s)
         put_amf_string(pb, "videodatarate");
         put_amf_double(pb, video_enc->bit_rate / 1024.0);
 
-        put_amf_string(pb, "framerate");
-        put_amf_double(pb, framerate);
+        if (framerate != 0.0) {
+            put_amf_string(pb, "framerate");
+            put_amf_double(pb, framerate);
+            metadata_count++;
+        }
 
         put_amf_string(pb, "videocodecid");
         put_amf_double(pb, video_enc->codec_tag);
@@ -506,7 +507,7 @@ static int flv_write_packet(AVFormatContext *s, AVPacket *pkt)
 
     if (enc->codec_type == AVMEDIA_TYPE_DATA) {
         int data_size;
-        int metadata_size_pos = avio_tell(pb);
+        int64_t metadata_size_pos = avio_tell(pb);
         avio_w8(pb, AMF_DATA_TYPE_STRING);
         put_amf_string(pb, "onTextData");
         avio_w8(pb, AMF_DATA_TYPE_MIXEDARRAY);

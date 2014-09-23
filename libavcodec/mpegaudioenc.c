@@ -743,7 +743,7 @@ static int MPA_encode_frame(AVCodecContext *avctx, AVPacket *avpkt,
 }
 
 static const AVCodecDefault mp2_defaults[] = {
-    { "b",    "128k" },
+    { "b", "384000" },
     { NULL },
 };
 

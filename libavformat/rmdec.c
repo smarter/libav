@@ -19,6 +19,8 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
+#include <inttypes.h>
+
 #include "libavutil/avstring.h"
 #include "libavutil/channel_layout.h"
 #include "libavutil/internal.h"
@@ -84,11 +86,10 @@ static int rm_read_extradata(AVIOContext *pb, AVCodecContext *avctx, unsigned si
 {
     if (size >= 1<<24)
         return -1;
-    avctx->extradata = av_malloc(size + FF_INPUT_BUFFER_PADDING_SIZE);
+    avctx->extradata = av_mallocz(size + FF_INPUT_BUFFER_PADDING_SIZE);
     if (!avctx->extradata)
         return AVERROR(ENOMEM);
     avctx->extradata_size = avio_read(pb, avctx->extradata, size);
-    memset(avctx->extradata + avctx->extradata_size, 0, FF_INPUT_BUFFER_PADDING_SIZE);
     if (avctx->extradata_size != size)
         return AVERROR(EIO);
     return 0;
@@ -238,8 +239,6 @@ static int rm_read_audio_stream_info(AVFormatContext *s, AVIOContext *pb,
                     return ret;
             }
             break;
-        default:
-            av_strlcpy(st->codec->codec_name, buf, sizeof(st->codec->codec_name));
         }
         if (ast->deint_id == DEINT_ID_INT4 ||
             ast->deint_id == DEINT_ID_GENR ||
@@ -269,7 +268,7 @@ static int rm_read_audio_stream_info(AVFormatContext *s, AVIOContext *pb,
         case DEINT_ID_VBRF:
             break;
         default:
-            av_log(NULL,0,"Unknown interleaver %X\n", ast->deint_id);
+            av_log(NULL, 0 ,"Unknown interleaver %"PRIX32"\n", ast->deint_id);
             return AVERROR_INVALIDDATA;
         }
 

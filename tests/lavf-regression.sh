@@ -44,11 +44,11 @@ do_audio_only()
 }
 
 if [ -n "$do_avi" ] ; then
-do_lavf avi "" "-acodec mp2"
+do_lavf avi "" "-acodec mp2 -ar 44100"
 fi
 
 if [ -n "$do_asf" ] ; then
-do_lavf asf "" "-acodec mp2" "-r 25"
+do_lavf asf "" "-acodec mp2 -ar 44100" "-r 25"
 fi
 
 if [ -n "$do_rm" ] ; then
@@ -59,7 +59,7 @@ do_avconv $file $DEC_OPTS -f image2 -vcodec pgmyuv -i $raw_src $DEC_OPTS -ar 441
 fi
 
 if [ -n "$do_mpg" ] ; then
-do_lavf mpg
+do_lavf mpg "" "-ar 44100"
 fi
 
 if [ -n "$do_mxf" ] ; then
@@ -71,15 +71,11 @@ do_lavf mxf_d10 "-ar 48000 -ac 2" "-r 25 -vf scale=720:576,pad=720:608:0:32 -vco
 fi
 
 if [ -n "$do_ts" ] ; then
-do_lavf ts "" "-mpegts_transport_stream_id 42"
+do_lavf ts "" "-mpegts_transport_stream_id 42 -ar 44100"
 fi
 
 if [ -n "$do_swf" ] ; then
 do_lavf swf "" "-an"
-fi
-
-if [ -n "$do_ffm" ] ; then
-do_lavf ffm
 fi
 
 if [ -n "$do_flv_fmt" ] ; then
@@ -99,11 +95,11 @@ do_lavf gxf "-ar 48000" "-r 25 -s pal -ac 1"
 fi
 
 if [ -n "$do_nut" ] ; then
-do_lavf nut "" "-acodec mp2"
+do_lavf nut "" "-acodec mp2 -ar 44100"
 fi
 
 if [ -n "$do_mkv" ] ; then
-do_lavf mkv "" "-c:a mp2 -c:v mpeg4"
+do_lavf mkv "" "-c:a mp2 -c:v mpeg4 -ar 44100"
 fi
 
 
@@ -226,7 +222,7 @@ do_audio_only s16.voc "-ac 2" "-acodec pcm_s16le"
 fi
 
 if [ -n "$do_ogg" ] ; then
-do_audio_only ogg
+do_audio_only ogg "" "-c:a flac"
 fi
 
 if [ -n "$do_rso" ] ; then
